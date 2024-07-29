@@ -236,7 +236,7 @@ def main():
     }
 
     wandb.init(
-        entity='dashstander',
+        entity='dstander',
         group="parity-1Layer",
         project="deep-parity",
         config=config
