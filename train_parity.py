@@ -242,7 +242,7 @@ def main():
         config=config
     )
 
-    wandb.watch(model, log_freq=200)
+    wandb.watch(model, log="all", log_freq=200)
 
     try:
         train(
