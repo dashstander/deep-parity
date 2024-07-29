@@ -38,7 +38,7 @@ def make_base_parity_dataframe(n):
 def calc_power_contributions(tensor, n, epoch):
     linear_dim = tensor.shape[1]
     base_df = make_base_parity_dataframe(n)
-    ft = fourier_transform(tensor)
+    ft = fourier_transform(tensor.T.to('cuda'))
     linear_df = pl.DataFrame(
         ft.T.detach().cpu().numpy(),
         schema=[str(i) for i in range(linear_dim)]
