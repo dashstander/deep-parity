@@ -93,8 +93,8 @@ def loss_fn(logits, labels):
 def train_forward(model, dataloader):
     total_loss = torch.tensor(0., device='cuda')
     for bits, parities in dataloader:
-        logits = model(bits)
-        losses = loss_fn(logits, parities)
+        logits = model(bits.to('cuda'))
+        losses = loss_fn(logits, parities.to('cuda'))
         mean_loss = losses.mean()
         mean_loss.backward()
         total_loss += mean_loss
@@ -108,7 +108,7 @@ def test_forward(model, dataloader):
     for bits, parities in dataloader:
         if i > num_batches:
             break
-        logits  = model(bits)
+        logits  = model(bits.to('cuda'))
         losses = loss_fn(logits, parities)
         total_loss += losses.mean()
     return total_loss.item()
