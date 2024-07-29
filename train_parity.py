@@ -15,7 +15,7 @@ def get_activations(model, n, path):
     bits = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
     activations = []
     for batch in bits.split(batch_size):
-        _, cache = model.run_with_cache(batch)
+        _, cache = model.run_with_cache(batch.to('cuda'))
         activations.append(cache[path])
     return torch.concatenate(activations)
 
