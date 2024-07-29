@@ -16,7 +16,7 @@ def get_activations(model, n, path):
     activations = []
     for batch in bits.split(batch_size):
         _, cache = model.run_with_cache(batch.to('cuda'))
-        activations.append(cache[path])
+        activations.append(cache[path].detach().cpu())
     return torch.concatenate(activations)
 
 
@@ -147,7 +147,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
         
         if epoch % 10 == 0:
             linear_data = fourier_analysis(model, n, epoch)
-            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['value'][0] for rec in linear_data.to_dicts()}
+            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['value'] for rec in linear_data.to_dicts()}
             msg.update(linear_powers)
            
         if epoch % 200 == 0:
