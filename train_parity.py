@@ -10,6 +10,16 @@ from deep_parity.boolean_cube import fourier_transform, generate_all_binary_arra
 from deep_parity.model import MLP
 
 
+def get_activations(model, n, path):
+    batch_size = 2 ** 14
+    bits = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
+    activations = []
+    for batch in bits.split(batch_size):
+        _, cache = model.run_with_cache(batch)
+        activations.append(cache[path])
+    return torch.concatenate(activations)
+
+
 def make_base_parity_dataframe(n):
     all_binary_data = generate_all_binary_arrays(n)
     all_degrees = all_binary_data.sum(axis=1)
@@ -55,12 +65,10 @@ def calc_power_contributions(tensor, n, epoch):
 
 
 def fourier_analysis(model, n, epoch):
-    bits = generate_all_binary_arrays(n)
     model.eval()
     with torch.no_grad():
-        _, cache = model.run_with_cache(bits)
-    linear = cache['hook_linear']
-    embed_power_df = calc_power_contributions(linear, n, epoch)
+        linear_preacts = get_activations(model, n, 'hook_linear')
+    embed_power_df = calc_power_contributions(linear_preacts, n, epoch)
     model.train()
     return embed_power_df
 
