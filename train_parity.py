@@ -185,7 +185,7 @@ def main():
     model_dim = 1024
     optimizer_params = {
         "lr" : 1e-5,
-        "wd" : 1.0,
+        "weight_decay" : 1.0,
         "betas" : [0.9, 0.98]
     }
     num_epochs = 50_000
