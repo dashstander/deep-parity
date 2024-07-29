@@ -67,7 +67,7 @@ def fourier_analysis(model, n, epoch):
 
 def get_dataloaders(n, batch_size, frac_train, seed):
     sequences = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
-    parities = sequences.sum(dim=1) % 2
+    parities = sequences.sum(dim=1).to(torch.int64) % 2
     data = TensorDataset(sequences, parities)
     train_data, test_data = random_split(
         data,
