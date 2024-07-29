@@ -15,7 +15,6 @@ def generate_all_binary_arrays(n: int):
     return ((numbers[:, np.newaxis] >> np.arange(n)[::-1]) & 1).astype(np.uint8)
 
 
-@torch.compile
 def fourier_transform(u, normalize=True):
     """Multiply H_n @ u where H_n is the Hadamard matrix of dimension n x n.
     n must be a power of 2.
