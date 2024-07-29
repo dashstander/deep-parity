@@ -31,7 +31,7 @@ class MLP(HookedRootModule):
         return cls(n, embed_dim, model_dims)
     
     def forward(self, x):
-        embed = self.hook_embed(self.embed(x))
+        embed = relu(self.hook_embed(self.embed(x)))
         hidden = relu(self.hook_linear(self.linear(embed)))
         logits = self.hook_unembed(self.unembed(hidden))
         return logits

@@ -190,7 +190,7 @@ def main():
     n = 18
     batch_size = 2 ** 14
     frac_train = 0.95
-    embed_dim = 256
+    embed_dim = 1024
     model_dim = 2048
     optimizer_params = {
         "lr" : 1e-5,
