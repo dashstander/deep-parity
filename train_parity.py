@@ -84,9 +84,8 @@ def loss_fn(logits, labels):
     if len(logits.shape) == 3:
         logits = logits[:, -1]
     logits = logits.to(torch.float64)
-    
     log_probs = logits.log_softmax(dim=-1)
-    correct_log_probs = log_probs.gather(dim=-1, index=labels)[:, 0]
+    correct_log_probs = log_probs.gather(dim=-1, index=labels.unsqueeze(1))[:, 0]
     return -1. * correct_log_probs
 
 
@@ -109,7 +108,7 @@ def test_forward(model, dataloader):
         if i > num_batches:
             break
         logits  = model(bits.to('cuda'))
-        losses = loss_fn(logits, parities)
+        losses = loss_fn(logits, parities.to('cuda'))
         total_loss += losses.mean()
     return total_loss.item()
 
@@ -179,7 +178,7 @@ def main():
     # Configs
     ###########################
     n = 20
-    batch_size = 2 ** 10
+    batch_size = 2 ** 14
     frac_train = 0.95
     embed_dim = 256
     model_dim = 1024
