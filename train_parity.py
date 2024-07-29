@@ -147,7 +147,8 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
         
         if epoch % 10 == 0:
             linear_data = fourier_analysis(model, n, epoch)
-            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'] for rec in linear_data.to_dicts()}
+            df = linear_data.group_by('degree').with_columns(pl.col('pcnt_power').implode())
+            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'][0] for rec in df.to_dicts()}
             msg.update(linear_powers)
            
         if epoch % 200 == 0:
@@ -190,10 +191,10 @@ def main():
     batch_size = 2 ** 14
     frac_train = 0.95
     embed_dim = 256
-    model_dim = 1024
+    model_dim = 2048
     optimizer_params = {
         "lr" : 1e-5,
-        "weight_decay" : 1.0,
+        "weight_decay" : 0.1,
         "betas" : [0.9, 0.98]
     }
     num_epochs = 50_000
