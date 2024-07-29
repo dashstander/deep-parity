@@ -147,7 +147,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
         
         if epoch % 10 == 0:
             linear_data = fourier_analysis(model, n, epoch)
-            df = linear_data.group_by('degree').with_columns(pl.col('pcnt_power').implode())
+            df = linear_data.group_by('degree').agg(pl.col('pcnt_power').implode())
             linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'][0] for rec in df.to_dicts()}
             msg.update(linear_powers)
            
