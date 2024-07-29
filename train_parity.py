@@ -138,10 +138,11 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
 
         msg = {'loss/train': train_loss}
 
-        if epoch % 10 == 0:
-            with torch.no_grad():
-                test_loss = test_forward(model, test_dataloader)
-                msg['loss/test'] = test_loss
+        model.eval()
+        with torch.no_grad():
+            test_loss = test_forward(model, test_dataloader)
+            msg['loss/test'] = test_loss
+        model.train()
 
         optimizer.zero_grad()
         
