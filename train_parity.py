@@ -115,6 +115,7 @@ def test_forward(model, dataloader):
 
 def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_config = config['train']
+    n = config['model']['n']
     checkpoint_dir = Path('checkpoints')
     #checkpoint_dir = setup_checkpointing(train_config, seed)
     model_checkpoints = []
@@ -137,7 +138,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
         optimizer.zero_grad()
         
         if epoch % 10 == 0:
-            linear_data = fourier_analysis(model, group, epoch)
+            linear_data = fourier_analysis(model, n, epoch)
             linear_powers = {f"linear/degree{int(rec['degree'])}": rec['value'][0] for rec in linear_data.to_dicts()}
             msg.update(linear_powers)
            
