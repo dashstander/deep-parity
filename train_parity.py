@@ -14,8 +14,6 @@ def make_base_parity_dataframe(n):
     all_binary_data = generate_all_binary_arrays(n)
     all_degrees = all_binary_data.sum(axis=1)
     all_parities = all_degrees % 2
-
-
     base_df = pl.DataFrame({
         'bits': all_binary_data, 
         'parities': all_parities, 
@@ -27,28 +25,43 @@ def make_base_parity_dataframe(n):
     return base_df
 
 
-def calc_power_contributions(tensor, n):
+def calc_power_contributions(tensor, n, epoch):
+    linear_dim = tensor.shape[1]
     base_df = make_base_parity_dataframe(n)
     ft = fourier_transform(tensor)
     linear_df = pl.DataFrame(
-        ft.T.numpy(),
-        schema=[str(i) for i in range(ft.shape[0])]
+        ft.T.detach().cpu().numpy(),
+        schema=[str(i) for i in range(linear_dim)]
     )
     data = pl.concat([base_df, linear_df], how='horizontal')
-
-    irreps = list(power_contribs.keys())
-    power_vals = torch.cat([power_contribs[irrep].unsqueeze(0) for irrep in irreps], dim=0)
-    val_data = pl.DataFrame(power_vals.detach().cpu().numpy(), schema=[f'dim{i}' for i in range(power_vals.shape[1])])
-
-    return val_data, power_contribs
+    total_power = (
+        data
+        .select(pl.exclude('bits', 'parities', 'indices', 'degree'))
+        .unpivot()
+        .with_columns(pl.col('variable').str.to_integer())
+        .group_by('variable').agg(pl.col('value').pow(2).sum())
+        .rename({'value': 'power'})
+    )
+    power_df = (
+        data
+        .select(pl.exclude('bits', 'parities', 'indices'))
+        .unpivot(index='degree')
+        .with_columns(pl.col('variable').str.to_integer())
+        .group_by('degree', 'variable').agg(pl.col('value').pow(2).sum())
+        .join(total_power, on='variable', how='left')
+        .with_columns(pcnt_power = pl.col('value') / pl.col('power'), epoch=pl.lit(epoch))
+    )
+    return power_df
 
 
 def fourier_analysis(model, n, epoch):
-    W = model.linear.weight
-    embeds = model.embed.weight.T
-    embed_dim = embeds.shape[0]
-    linear = (W @ embeds).T
-    embed_power_df = calc_power_contributions(linear, n).with_columns(pl.lit(epoch).alias('epoch'))
+    bits = generate_all_binary_arrays(n)
+    model.eval()
+    with torch.no_grad():
+        _, cache = model.run_with_cache(bits)
+    linear = cache['hook_linear']
+    embed_power_df = calc_power_contributions(linear, n, epoch)
+    model.train()
     return embed_power_df
 
 
@@ -123,18 +136,12 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed, gro
                 msg['loss/test'] = test_loss
 
         optimizer.zero_grad()
-        """
-        if epoch % 1000 == 0:
-            freq_data, left_powers, right_powers, unembed_powers = fourier_analysis(model, group, epoch)
-            left_powers = {f'left_linear/{k}': v for k, v in left_powers.items()}
-            right_powers = {f'right_linear/{k}': v for k, v in right_powers.items()}
-            unembed_powers = {f'unembed/{k}': v for k, v in unembed_powers.items()}
-            msg.update(left_powers)
-            msg.update(right_powers)
-            msg.update(unembed_powers)
-        """
         
-
+        if epoch % 10 == 0:
+            linear_data = fourier_analysis(model, group, epoch)
+            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['value'][0] for rec in linear_data.to_dicts()}
+            msg.update(linear_powers)
+           
         if epoch % 200 == 0:
             train_loss_data.append(train_loss)
             test_loss_data.append(test_loss)
