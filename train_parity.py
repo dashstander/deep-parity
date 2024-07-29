@@ -147,7 +147,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
         
         if epoch % 10 == 0:
             linear_data = fourier_analysis(model, n, epoch)
-            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['value'] for rec in linear_data.to_dicts()}
+            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'] for rec in linear_data.to_dicts()}
             msg.update(linear_powers)
            
         if epoch % 200 == 0:
