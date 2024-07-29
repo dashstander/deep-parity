@@ -10,11 +10,32 @@ from deep_parity.boolean_cube import fourier_transform, generate_all_binary_arra
 from deep_parity.model import MLP
 
 
-def calc_power_contributions(tensor, group):
-    total_power = (tensor ** 2).mean(dim=0)
-    fourier_transform = fourier_transform(tensor)
-    irrep_power = calc_power(fourier_transform, group.order)
-    power_contribs = {irrep: power / total_power for irrep, power in irrep_power.items()}
+def make_base_parity_dataframe(n):
+    all_binary_data = generate_all_binary_arrays(n)
+    all_degrees = all_binary_data.sum(axis=1)
+    all_parities = all_degrees % 2
+
+
+    base_df = pl.DataFrame({
+        'bits': all_binary_data, 
+        'parities': all_parities, 
+        'degree': all_degrees
+    })
+    base_df = base_df.with_columns(
+        indices=pl.col('bits').arr.to_list().list.eval(pl.arg_where(pl.element() == 1))
+    )
+    return base_df
+
+
+def calc_power_contributions(tensor, n):
+    base_df = make_base_parity_dataframe(n)
+    ft = fourier_transform(tensor)
+    linear_df = pl.DataFrame(
+        ft.T.numpy(),
+        schema=[str(i) for i in range(ft.shape[0])]
+    )
+    data = pl.concat([base_df, linear_df], how='horizontal')
+
     irreps = list(power_contribs.keys())
     power_vals = torch.cat([power_contribs[irrep].unsqueeze(0) for irrep in irreps], dim=0)
     val_data = pl.DataFrame(power_vals.detach().cpu().numpy(), schema=[f'dim{i}' for i in range(power_vals.shape[1])])
@@ -165,7 +186,7 @@ def main():
     seed = 3141529
     #############################
 
-    
+
     torch.manual_seed(seed)
 
     train_data, test_data = get_dataloaders(
