@@ -191,7 +191,7 @@ def main():
     batch_size = 2 ** 14
     frac_train = 0.95
     embed_dim = 1024
-    model_dim = 2048
+    model_dim = 1024
     optimizer_params = {
         "lr" : 1e-5,
         "weight_decay" : 0.1,
@@ -238,7 +238,7 @@ def main():
 
     wandb.init(
         entity='dstander',
-        group="parity-1Layer",
+        group="parity-2Layer",
         project="deep-parity",
         config=config
     )
