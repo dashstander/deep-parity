@@ -94,7 +94,7 @@ def loss_fn(logits, labels):
     logits = logits.to(torch.float64)
     log_probs = logits.log_softmax(dim=-1)
     correct_log_probs = log_probs.gather(dim=-1, index=labels.unsqueeze(1))[:, 0]
-    return -1. * correct_log_probs
+    return (-1. * correct_log_probs).sum()
 
 
 def train_forward(model, dataloader):
