@@ -82,8 +82,8 @@ def get_dataloaders(n, batch_size, frac_train, seed):
         [frac_train, 1 - frac_train],
         torch.Generator().manual_seed(seed)
     )
-    train_dataloader = DataLoader(train_data, batch_size=batch_size, pin_memory=True)
-    test_dataloader = DataLoader(test_data, batch_size=batch_size, pin_memory=True)
+    train_dataloader = DataLoader(train_data, batch_size=batch_size, shuffle=True, pin_memory=True)
+    test_dataloader = DataLoader(test_data, batch_size=batch_size, shuffle=True, pin_memory=True)
 
     return train_dataloader, test_dataloader
 
@@ -131,8 +131,13 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_loss_data = []
     test_loss_data = []
 
-    for epoch in tqdm.tqdm(range(train_config['num_epochs'])):
-        train_loss = train_forward(model, train_dataloader)
+    train_data = iter(train_dataloader)
+    test_data = iter(test_dataloader)
+
+    for step in tqdm.tqdm(range(train_config['num_steps'])):
+        bits, parities = next(train_data)
+        logits = model(bits.to('cuda'))
+        train_loss = loss_fn(logits, parities.to('cuda'))
         optimizer.step()
         optimizer.zero_grad()
 
@@ -140,19 +145,21 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
 
         model.eval()
         with torch.no_grad():
-            test_loss = test_forward(model, test_dataloader)
+            test_bits, test_parities = next(test_data)
+            test_logits = model(test_bits.to('cuda'))
+            test_loss = loss_fn(test_logits, test_parities.to('cuda'))
             msg['loss/test'] = test_loss
         model.train()
 
         optimizer.zero_grad()
         
-        if epoch % 10 == 0:
-            linear_data = fourier_analysis(model, n, epoch)
+        if step % 1000 == 0:
+            linear_data = fourier_analysis(model, n, step)
             df = linear_data.group_by('degree').agg(pl.col('pcnt_power').implode())
             linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'][0] for rec in df.to_dicts()}
             msg.update(linear_powers)
            
-        if epoch % 200 == 0:
+        if step % 10_000 == 0:
             train_loss_data.append(train_loss)
             test_loss_data.append(test_loss)
             model_state = copy.deepcopy(model.state_dict())
@@ -167,7 +174,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
                     "config": config['model'],
                     "rng": torch.get_rng_state()
                 },
-                checkpoint_dir / f'{epoch}.pth'
+                checkpoint_dir / f'{step}.pth'
             )
             model_checkpoints.append(model_state)
             opt_checkpoints.append(opt_state)
@@ -189,7 +196,7 @@ def main():
     # Configs
     ###########################
     n = 18
-    batch_size = 2 ** 14
+    batch_size = 2 ** 15
     frac_train = 0.95
     embed_dim = 1024
     model_dim = 1024
@@ -198,7 +205,7 @@ def main():
         "weight_decay" : 0.1,
         "betas" : [0.9, 0.98]
     }
-    num_epochs = 50_000
+    num_epochs = 100_000
     device = torch.device('cuda')
     seed = 3141529
     #############################
