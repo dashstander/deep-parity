@@ -211,7 +211,7 @@ def main():
         "weight_decay" : 0.1,
         "betas" : [0.9, 0.98]
     }
-    num_steps = 200_000
+    num_steps = 50_000
     device = torch.device('cuda')
     seed = 3141529
     #############################
