@@ -39,6 +39,7 @@ def calc_power_contributions(tensor, n, epoch):
     linear_dim = tensor.shape[1]
     base_df = make_base_parity_dataframe(n)
     ft = fourier_transform(tensor.T.to('cuda'))
+    ft /= ft.mean(dim=0, keepdims=True)
     linear_df = pl.DataFrame(
         ft.T.detach().cpu().numpy(),
         schema=[str(i) for i in range(linear_dim)]
@@ -207,8 +208,8 @@ def main():
     embed_dim = 1024
     model_dim = 1024
     optimizer_params = {
-        "lr" : 1e-5,
-        "weight_decay" : 0.1,
+        "lr" : 1e-4,
+        "weight_decay" : 0.2,
         "betas" : [0.9, 0.98]
     }
     num_steps = 50_000
