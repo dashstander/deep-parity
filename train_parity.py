@@ -67,7 +67,7 @@ def calc_power_contributions(tensor, n, epoch):
 def fourier_analysis(model, n, epoch):
     model.eval()
     with torch.no_grad():
-        linear_preacts = get_activations(model, n, 'hook_linear')
+        linear_preacts = get_activations(model, n, 'hook_linear2')
     embed_power_df = calc_power_contributions(linear_preacts, n, epoch)
     model.train()
     return embed_power_df
@@ -246,7 +246,7 @@ def main():
 
     wandb.init(
         entity='dstander',
-        group="parity-2Layer",
+        group="parity-3Layer",
         project="deep-parity",
         config=config
     )
