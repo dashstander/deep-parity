@@ -13,10 +13,12 @@ class MLP(HookedRootModule):
         self.embed_dim = embed_dim
         self.model_dim = model_dim
         self.embed = nn.Linear(in_features=self.n, out_features=self.embed_dim, bias=False)
-        self.linear = nn.Linear(in_features=self.embed_dim, out_features=self.model_dim, bias=False)
+        self.linear1 = nn.Linear(in_features=self.embed_dim, out_features=self.model_dim, bias=False)
+        self.linear2 = nn.Linear(in_features=self.model_dim, out_features=self.model_dim, bias=False)
         self.unembed = nn.Linear(in_features=self.model_dim, out_features=2)
         self.hook_embed = HookPoint()
-        self.hook_linear = HookPoint()
+        self.hook_linear1 = HookPoint()
+        self.hook_linear2 = HookPoint()
         self.hook_unembed = HookPoint()
         # Gives each module a parameter with its name (relative to this root module)
         # Needed for HookPoints to work
@@ -32,7 +34,8 @@ class MLP(HookedRootModule):
     
     def forward(self, x):
         embed = relu(self.hook_embed(self.embed(x)))
-        hidden = relu(self.hook_linear(self.linear(embed)))
-        logits = self.hook_unembed(self.unembed(hidden))
+        hidden1 = relu(self.hook_linear1(self.linear1(embed)))
+        hidden2 = relu(self.hook_linear2(self.linear2(hidden1)))
+        logits = self.hook_unembed(self.unembed(hidden2))
         return logits
     
