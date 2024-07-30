@@ -202,7 +202,7 @@ def main():
     # Configs
     ###########################
     n = 18
-    batch_size = 2 ** 15
+    batch_size = 2 ** 16
     frac_train = 0.95
     embed_dim = 1024
     model_dim = 1024
