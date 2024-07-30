@@ -121,6 +121,14 @@ def test_forward(model, dataloader):
     return total_loss.item()
 
 
+def endless_data_loader(data):
+    while True:
+        for batch in data:
+            yield batch
+        
+
+
+
 def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_config = config['train']
     n = config['model']['n']
@@ -131,8 +139,8 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_loss_data = []
     test_loss_data = []
 
-    train_data = iter(train_dataloader)
-    test_data = iter(test_dataloader)
+    train_data = endless_data_loader(train_dataloader)
+    test_data = endless_data_loader(test_dataloader)
 
     for step in tqdm.tqdm(range(train_config['num_steps'])):
         bits, parities = next(train_data)
@@ -164,9 +172,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
             test_loss_data.append(test_loss)
             model_state = copy.deepcopy(model.state_dict())
             opt_state = copy.deepcopy(optimizer.state_dict())
-            #freq_data.melt(
-            #    id_vars=['epoch', 'layer', 'irrep']
-            #).write_parquet(checkpoint_dir / f'fourier{epoch}.parquet')
+
             torch.save(
                 {
                     "model": model_state,
