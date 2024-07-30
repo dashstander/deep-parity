@@ -139,13 +139,13 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_loss_data = []
     test_loss_data = []
 
-    train_data = endless_data_loader(train_dataloader)
-    test_data = endless_data_loader(test_dataloader)
+    #train_data = endless_data_loader(train_dataloader)
+    #test_data = endless_data_loader(test_dataloader)
 
     for step in tqdm.tqdm(range(train_config['num_steps'])):
-        bits, parities = next(train_data)
-        logits = model(bits.to('cuda'))
-        train_loss = loss_fn(logits, parities.to('cuda'))
+        #bits, parities = next(train_data)
+        #logits = model(bits.to('cuda'))
+        train_loss = train_forward(model, train_dataloader)
         optimizer.step()
         optimizer.zero_grad()
 
@@ -153,9 +153,9 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
 
         model.eval()
         with torch.no_grad():
-            test_bits, test_parities = next(test_data)
-            test_logits = model(test_bits.to('cuda'))
-            test_loss = loss_fn(test_logits, test_parities.to('cuda'))
+            #test_bits, test_parities = next(test_data)
+            #test_logits = model(test_bits.to('cuda'))
+            test_loss = test_forward(model, test_dataloader)
             msg['loss/test'] = test_loss
         model.train()
 
