@@ -117,8 +117,8 @@ def main():
     ###########################
     # Configs
     ###########################
-    n = 20
-    k = 10
+    n = 30
+    k = 15
     k_indices = np.random.choice(n, k, replace=False)
     batch_size = 2 ** 16
     layer_sizes = [1024, 2048, 1024]
