@@ -121,7 +121,7 @@ def main():
     k = 15
     k_indices = np.random.choice(n, k, replace=False)
     batch_size = 2 ** 16
-    layer_sizes = [1024, 2048, 1024]
+    layer_sizes = [2048, 4096, 2048]
     optimizer_params = {
         "lr": 3e-4,
         "weight_decay": 0.01,
