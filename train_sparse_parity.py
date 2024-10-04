@@ -1,7 +1,7 @@
 import numpy as np
 from pathlib import Path
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, IterableDataset
 import tqdm.auto as tqdm
 import wandb
 
@@ -23,10 +23,10 @@ def get_dataloaders(batch_size, n, k_indices):
             parities = calculate_k_sparse_parity(bits, k_indices)
             yield bits, parities
 
-    train_dataloader = DataLoader(data_generator(), batch_size=None)
-    test_dataloader = DataLoader(data_generator(), batch_size=None)
+    #train_dataloader = DataLoader(data_generator(), batch_size=None)
+    #test_dataloader = DataLoader(data_generator(), batch_size=None)
 
-    return train_dataloader, test_dataloader
+    return data_generator(), data_generator()
 
 
 def estimate_prediction_variance(model, n, k, k_indices, num_samples=1000):
