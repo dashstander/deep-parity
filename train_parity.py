@@ -1,4 +1,5 @@
 import copy
+import numpy as np
 from pathlib import Path
 import polars as pl
 import torch
@@ -21,16 +22,15 @@ def get_activations(model, n, path):
 
 
 def make_base_parity_dataframe(n):
-    all_binary_data = generate_all_binary_arrays(n)
-    all_degrees = all_binary_data.sum(axis=1)
-    all_parities = all_degrees % 2
+    all_binary_data_zero_one = generate_all_binary_arrays(n)
+    all_binary_data = np.sign(-1 * all_binary_data_zero_one + 0.5)
+    all_parities = all_binary_data.prod(axis=1)
     base_df = pl.DataFrame({
         'bits': all_binary_data, 
         'parities': all_parities, 
-        'degree': all_degrees
     })
     base_df = base_df.with_columns(
-        indices=pl.col('bits').arr.to_list().list.eval(pl.arg_where(pl.element() == 1))
+        indices=pl.col('bits').arr.to_list().list.eval(pl.arg_where(pl.element() == -1))
     )
     return base_df
 
@@ -127,8 +127,6 @@ def endless_data_loader(data):
         for batch in data:
             yield batch
         
-
-
 
 def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_config = config['train']

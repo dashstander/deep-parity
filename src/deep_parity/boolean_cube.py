@@ -15,6 +15,15 @@ def generate_all_binary_arrays(n: int):
     return ((numbers[:, np.newaxis] >> np.arange(n)[::-1]) & 1).astype(np.uint8)
 
 
+def get_subcube(n, indices, values):
+    assert len(indices) == len(values) and len(indices) < n
+    full_cube = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
+    subcube_indices = torch.argwhere(torch.stack([
+        full_cube[:, idx] == v for idx, v in zip(indices, values)
+    ]).all(dim=0)).squeeze()
+    return full_cube[subcube_indices, :]
+
+
 def fourier_transform(u, normalize=True):
     """Multiply H_n @ u where H_n is the Hadamard matrix of dimension n x n.
     n must be a power of 2.
