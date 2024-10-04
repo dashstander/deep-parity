@@ -49,7 +49,9 @@ def estimate_prediction_variance(model, n, k, k_indices, num_samples=1000):
 
 def train_forward(model, dataloader):
     total_loss = torch.tensor(0., device='cuda')
-    for bits, parities in dataloader:
+    num_batches = 10
+    for _ in range(num_batches):
+        bits, parities = next(dataloader)
         logits = model(bits.to('cuda'))
         losses = torch.nn.functional.cross_entropy(logits, parities.to('cuda'))
         mean_loss = losses.mean()
@@ -60,10 +62,9 @@ def train_forward(model, dataloader):
 
 def test_forward(model, dataloader):
     total_loss = torch.tensor(0., device='cuda')
-    num_batches = 10
-    for i, (bits, parities) in enumerate(dataloader):
-        if i >= num_batches:
-            break
+    num_batches = 2
+    for _ in enumerate(num_batches):
+        bits, parities = next(dataloader)
         with torch.no_grad():
             logits = model(bits.to('cuda'))
             losses = torch.nn.functional.cross_entropy(logits, parities.to('cuda'))
@@ -88,8 +89,6 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, k_indices
         if step % 100 == 0:
             test_loss = test_forward(model, test_dataloader)
             msg['loss/test'] = test_loss
-
-        if step % 1000 == 0:
             prediction_variance = estimate_prediction_variance(model, n, k, k_indices)
             msg['prediction_variance'] = prediction_variance
 
