@@ -63,7 +63,7 @@ def train_forward(model, dataloader):
 def test_forward(model, dataloader):
     total_loss = torch.tensor(0., device='cuda')
     num_batches = 2
-    for _ in enumerate(num_batches):
+    for _ in range(num_batches):
         bits, parities = next(dataloader)
         with torch.no_grad():
             logits = model(bits.to('cuda'))
