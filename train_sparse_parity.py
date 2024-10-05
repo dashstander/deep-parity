@@ -130,7 +130,7 @@ def main():
     num_steps = 1_00_000
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(f'Training on {device}')
-    seed = 3141529
+    seed = 57721566
     #############################
 
     torch.manual_seed(seed)
