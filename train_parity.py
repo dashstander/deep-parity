@@ -134,15 +134,11 @@ def endless_data_loader(data):
 def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_config = config['train']
     n = config['model']['n']
-    checkpoint_dir = Path('checkpoints-wd01')
-    #checkpoint_dir = setup_checkpointing(train_config, seed)
+    checkpoint_dir = Path('checkpoints-1layer')
     model_checkpoints = []
     opt_checkpoints = []
     train_loss_data = []
     test_loss_data = []
-
-    #train_data = endless_data_loader(train_dataloader)
-    #test_data = endless_data_loader(test_dataloader)
 
     for step in tqdm.tqdm(range(train_config['num_steps'])):
         #bits, parities = next(train_data)
@@ -163,7 +159,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
 
         optimizer.zero_grad()
         
-        if step % 200 == 0:
+        if step % 200 == 0 and step != 0:
             linear_data = fourier_analysis(model, n, step)
             df = linear_data.group_by('degree').agg(pl.col('pcnt_power').implode())
             linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'][0] for rec in df.to_dicts()}
