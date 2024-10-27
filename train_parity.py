@@ -53,7 +53,6 @@ def calc_power_contributions(tensor, n, epoch):
         .with_columns(pl.col('variable').str.to_integer())
         .group_by('variable').agg(pl.col('value').pow(2).sum())
         .rename({'value': 'power'})
-        .collect()
     )
     power_df = (
         data
