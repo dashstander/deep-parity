@@ -41,7 +41,7 @@ def calc_power_contributions(tensor, n, epoch):
     linear_dim = tensor.shape[1]
     base_df = make_base_parity_dataframe(n)
     centered_tensor = tensor - tensor.mean(dim=0, keepdims=True)
-    ft = fourier_transform(centered_tensor.T.to('cuda'))
+    ft = fourier_transform(centered_tensor.T)
     linear_df = pl.DataFrame(
         ft.T.detach().cpu().numpy(),
         schema=[str(i) for i in range(linear_dim)]
@@ -159,7 +159,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
 
         optimizer.zero_grad()
         
-        if step % 200 == 0 and step != 0:
+        if step % 200 == 0:
             linear_data = fourier_analysis(model, n, step)
             df = linear_data.group_by('degree').agg(pl.col('pcnt_power').implode())
             linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'][0] for rec in df.to_dicts()}
