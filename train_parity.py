@@ -67,7 +67,6 @@ def calc_power_contributions(tensor, n, epoch):
             .group_by(['variable']).agg(pl.col('value').pow(2).sum())
             .join(total_power, on='variable', how='left')
             .with_columns(pcnt_power = pl.col('value') / pl.col('power'), epoch=pl.lit(epoch))
-            .collect()
         )
         powers[f'degree_{i}'] = power_df['pcnt_power'].to_numpy()
     return powers
