@@ -23,7 +23,7 @@ def get_activations(model, n):
 
 
 def make_base_parity_dataframe(n):
-    all_binary_data = generate_all_binary_arrays(n).astype(np.float32)
+    all_binary_data = generate_all_binary_arrays(n).astype(np.int32)
     #all_binary_data = np.sign(-1 * all_binary_data_zero_one + 0.5)
     all_parities = all_binary_data.sum(axis=1) % 2
     base_df = pl.DataFrame({
