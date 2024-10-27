@@ -205,7 +205,7 @@ def main():
     n = 18
     batch_size = 2 ** 16
     frac_train = 0.95
-    model_dim = 4096
+    model_dim = 2048
     optimizer_params = {
         "lr" : 1e-4,
         "weight_decay" : 0.0,
