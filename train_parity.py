@@ -44,7 +44,7 @@ def calc_power_contributions(tensor, n, epoch):
     linear_df = pl.DataFrame(
         ft.T.detach().cpu().numpy(),
         schema=[str(i) for i in range(linear_dim)]
-    )
+    ).lazy()
     data = pl.concat([base_df, linear_df], how='horizontal')
     total_power = (
         data
@@ -53,17 +53,18 @@ def calc_power_contributions(tensor, n, epoch):
         .with_columns(pl.col('variable').str.to_integer())
         .group_by('variable').agg(pl.col('value').pow(2).sum())
         .rename({'value': 'power'})
+        .collect()
     )
     power_df = (
         data
         .select(pl.exclude('bits', 'parities', 'indices'))
-        .unpivot(index='degree')
+        .unpivot()
         .with_columns(pl.col('variable').str.to_integer())
-        .group_by('degree', 'variable').agg(pl.col('value').pow(2).sum())
+        .group_by('variable').agg(pl.col('value').pow(2).sum())
         .join(total_power, on='variable', how='left')
         .with_columns(pcnt_power = pl.col('value') / pl.col('power'), epoch=pl.lit(epoch))
     )
-    return power_df
+    return power_df.collect()
 
 
 def fourier_analysis(model, n, epoch):
