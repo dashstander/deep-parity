@@ -23,15 +23,16 @@ def get_activations(model, n):
 
 
 def make_base_parity_dataframe(n):
-    all_binary_data_zero_one = generate_all_binary_arrays(n).astype(np.float32)
-    all_binary_data = np.sign(-1 * all_binary_data_zero_one + 0.5)
-    all_parities = all_binary_data.prod(axis=1)
+    all_binary_data = generate_all_binary_arrays(n).astype(np.float32)
+    #all_binary_data = np.sign(-1 * all_binary_data_zero_one + 0.5)
+    all_parities = all_binary_data.sum(axis=1) % 2
     base_df = pl.DataFrame({
         'bits': all_binary_data, 
         'parities': all_parities, 
     })
     base_df = base_df.with_columns(
-        indices=pl.col('bits').arr.to_list().list.eval(pl.arg_where(pl.element() == -1))
+        indices=pl.col('bits').arr.to_list().list.eval(pl.arg_where(pl.element() == 1)),
+        degree=pl.col('bits').arr.sum(),
     )
     return base_df
 
@@ -51,15 +52,15 @@ def calc_power_contributions(tensor, n, epoch):
         .select(pl.exclude('bits', 'parities', 'indices', 'degree'))
         .unpivot()
         .with_columns(pl.col('variable').str.to_integer())
-        .group_by('variable').agg(pl.col('value').pow(2).sum())
+        .group_by(['variable']).agg(pl.col('value').pow(2).sum())
         .rename({'value': 'power'})
     )
     power_df = (
         data
         .select(pl.exclude('bits', 'parities', 'indices'))
-        .unpivot()
+        .unpivot(index='degree')
         .with_columns(pl.col('variable').str.to_integer())
-        .group_by('variable').agg(pl.col('value').pow(2).sum())
+        .group_by(['degree', 'variable']).agg(pl.col('value').pow(2).sum())
         .join(total_power, on='variable', how='left')
         .with_columns(pcnt_power = pl.col('value') / pl.col('power'), epoch=pl.lit(epoch))
     )
