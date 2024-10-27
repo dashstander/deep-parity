@@ -225,7 +225,7 @@ def main():
         seed
     )
 
-    checkpoint_dir = Path('checkpoints-wd01')
+    checkpoint_dir = Path('checkpoints-1layer')
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
  
 
