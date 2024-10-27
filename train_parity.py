@@ -46,7 +46,7 @@ def calc_power_contributions(tensor, n, epoch):
         ft.T.detach().cpu().numpy(),
         schema=[str(i) for i in range(linear_dim)]
     )
-    data = pl.concat([base_df, linear_df], how='horizontal').lazy()
+    data = pl.concat([base_df, linear_df], how='horizontal')
     total_power = (
         data
         .select(pl.exclude('bits', 'parities', 'indices', 'degree'))
