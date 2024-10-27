@@ -55,16 +55,21 @@ def calc_power_contributions(tensor, n, epoch):
         .group_by(['variable']).agg(pl.col('value').pow(2).sum())
         .rename({'value': 'power'})
     )
-    power_df = (
-        data
-        .select(pl.exclude('bits', 'parities', 'indices'))
-        .unpivot(index='degree')
-        .with_columns(pl.col('variable').str.to_integer())
-        .group_by(['degree', 'variable']).agg(pl.col('value').pow(2).sum())
-        .join(total_power, on='variable', how='left')
-        .with_columns(pcnt_power = pl.col('value') / pl.col('power'), epoch=pl.lit(epoch))
-    )
-    return power_df.collect()
+    powers = {}
+    for i in range(1, n):
+
+        power_df = (
+            data.filter(pl.col('degree').eq(i))
+            .select(pl.exclude('bits', 'parities', 'indices'))
+            .unpivot()
+            .with_columns(pl.col('variable').str.to_integer())
+            .group_by(['variable']).agg(pl.col('value').pow(2).sum())
+            .join(total_power, on='variable', how='left')
+            .with_columns(pcnt_power = pl.col('value') / pl.col('power'), epoch=pl.lit(epoch))
+            .collect()
+        )
+        powers[f'degree_{i}'] = power_df['pcnt_power'].to_numpy()
+    return powers
 
 
 def fourier_analysis(model, n, epoch):
@@ -161,9 +166,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
         
         if step % 200 == 0:
             linear_data = fourier_analysis(model, n, step)
-            df = linear_data.group_by('degree').agg(pl.col('pcnt_power').implode())
-            linear_powers = {f"linear/degree{int(rec['degree'])}": rec['pcnt_power'][0] for rec in df.to_dicts()}
-            msg.update(linear_powers)
+            msg.update(linear_data)
            
         if step % 10_000 == 0:
             train_loss_data.append(train_loss)
