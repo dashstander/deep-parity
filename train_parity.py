@@ -32,7 +32,7 @@ def make_base_parity_dataframe(n):
     })
     base_df = base_df.with_columns(
         indices=pl.col('bits').arr.to_list().list.eval(pl.arg_where(pl.element() == 1)),
-        degree=pl.col('bits').arr.sum(),
+        degree=pl.col('bits').arr.sum().cast(pl.Int32),
     )
     return base_df
 
