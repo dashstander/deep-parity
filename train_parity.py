@@ -47,6 +47,7 @@ def calc_power_contributions(tensor, n, epoch):
         schema=[str(i) for i in range(linear_dim)]
     )
     data = pl.concat([base_df, linear_df], how='horizontal')
+    print(data['degree'].unique())
     total_power = (
         data
         .select(pl.exclude('bits', 'parities', 'indices', 'degree'))
