@@ -3,21 +3,22 @@ import numpy as np
 from pathlib import Path
 import polars as pl
 import torch
+from torch.nn.functional import relu
 from torch.utils.data import DataLoader, random_split, TensorDataset
 import tqdm.auto as tqdm
 import wandb
 
 from deep_parity.boolean_cube import fourier_transform, generate_all_binary_arrays
-from deep_parity.model import MLP
+from deep_parity.model import MLP, Perceptron
 
 
-def get_activations(model, n, path):
+def get_activations(model, n):
     batch_size = 2 ** 14
     bits = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
     activations = []
     for batch in bits.split(batch_size):
-        _, cache = model.run_with_cache(batch.to('cuda'))
-        activations.append(cache[path].detach().cpu())
+        acts = relu(model.linear(batch.to('cuda')))
+        activations.append(acts.detach().cpu())
     return torch.concatenate(activations)
 
 
@@ -38,8 +39,8 @@ def make_base_parity_dataframe(n):
 def calc_power_contributions(tensor, n, epoch):
     linear_dim = tensor.shape[1]
     base_df = make_base_parity_dataframe(n)
-    ft = fourier_transform(tensor.T.to('cuda'))
-    ft /= ft.mean(dim=0, keepdims=True)
+    centered_tensor = tensor - tensor.mean(dim=0, keepdims=True)
+    ft = fourier_transform(centered_tensor.T.to('cuda'))
     linear_df = pl.DataFrame(
         ft.T.detach().cpu().numpy(),
         schema=[str(i) for i in range(linear_dim)]
@@ -68,7 +69,7 @@ def calc_power_contributions(tensor, n, epoch):
 def fourier_analysis(model, n, epoch):
     model.eval()
     with torch.no_grad():
-        linear_preacts = get_activations(model, n, 'hook_linear2')
+        linear_preacts = get_activations(model, n)
     embed_power_df = calc_power_contributions(linear_preacts, n, epoch)
     model.train()
     return embed_power_df
@@ -203,14 +204,13 @@ def main():
     n = 18
     batch_size = 2 ** 16
     frac_train = 0.95
-    embed_dim = 1024
-    model_dim = 1024
+    model_dim = 4096
     optimizer_params = {
         "lr" : 1e-4,
-        "weight_decay" : 0.1,
+        "weight_decay" : 0.0,
         "betas" : [0.9, 0.98]
     }
-    num_steps = 50_000
+    num_steps = 100_000
     device = torch.device('cuda')
     seed = 3141529
     #############################
@@ -229,7 +229,7 @@ def main():
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
  
 
-    model = MLP(n, embed_dim, model_dim).to(device)
+    model = Perceptron(n, model_dim).to(device)
     optimizer = torch.optim.AdamW(
         model.parameters(),
         **optimizer_params
@@ -238,7 +238,6 @@ def main():
     config = {
         "model": {
             "n": n,
-            "embed_dim": embed_dim,
             "model_dim": model_dim,
         },
         "optim": optimizer_params,
@@ -251,7 +250,7 @@ def main():
 
     wandb.init(
         entity='dstander',
-        group="parity-3Layer",
+        group="parity-1Layer",
         project="deep-parity",
         config=config
     )
