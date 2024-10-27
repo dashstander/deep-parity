@@ -47,7 +47,6 @@ def calc_power_contributions(tensor, n, epoch):
         schema=[str(i) for i in range(linear_dim)]
     )
     data = pl.concat([base_df, linear_df], how='horizontal')
-    
     total_power = (
         data
         .select(pl.exclude('bits', 'parities', 'indices', 'degree'))
@@ -58,7 +57,6 @@ def calc_power_contributions(tensor, n, epoch):
     )
     powers = {}
     for i in range(1, n):
-        print(i)
         power_df = (
             data.filter(pl.col('degree') == i)
             .select(pl.exclude('bits', 'parities', 'indices', 'degree'))
@@ -67,6 +65,8 @@ def calc_power_contributions(tensor, n, epoch):
             .group_by(['variable']).agg(pl.col('value').pow(2).sum())
             .join(total_power, on='variable', how='left')
             .with_columns(pcnt_power = pl.col('value') / pl.col('power'), epoch=pl.lit(epoch))
+            .sort('variable')
+            .filter(pl.col('pcnt_power').is_not_nan())
         )
         powers[f'degree_{i}'] = power_df['pcnt_power'].to_numpy()
     return powers
