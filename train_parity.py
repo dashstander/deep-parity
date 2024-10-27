@@ -23,7 +23,7 @@ def get_activations(model, n):
 
 
 def make_base_parity_dataframe(n):
-    all_binary_data_zero_one = generate_all_binary_arrays(n)
+    all_binary_data_zero_one = generate_all_binary_arrays(n).astype(np.float32)
     all_binary_data = np.sign(-1 * all_binary_data_zero_one + 0.5)
     all_parities = all_binary_data.prod(axis=1)
     base_df = pl.DataFrame({
@@ -77,7 +77,8 @@ def fourier_analysis(model, n, epoch):
 
 def get_dataloaders(n, batch_size, frac_train, seed):
     sequences = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
-    parities = sequences.sum(dim=1).to(torch.int64) % 2
+    sequences = -1. * torch.sign(sequences - 0.5)
+    parities = ((sequences.prod(dim=1) + 1) / 2).to(torch.int64)
     data = TensorDataset(sequences, parities)
     train_data, test_data = random_split(
         data,
