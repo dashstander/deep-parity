@@ -168,7 +168,7 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
             linear_data = fourier_analysis(model, n, step)
             msg.update(linear_data)
            
-        if step % 10_000 == 0:
+        if step % 1_000 == 0:
             train_loss_data.append(train_loss)
             test_loss_data.append(test_loss)
             model_state = copy.deepcopy(model.state_dict())
@@ -202,16 +202,16 @@ def main():
     ###########################
     # Configs
     ###########################
-    n = 18
+    n = 20
     batch_size = 2 ** 16
     frac_train = 0.95
-    model_dim = 2048
+    model_dim = 4096
     optimizer_params = {
         "lr" : 1e-4,
         "weight_decay" : 0.0,
         "betas" : [0.9, 0.98]
     }
-    num_steps = 100_000
+    num_steps = 50_000
     device = torch.device('cuda')
     seed = 3141529
     #############################
