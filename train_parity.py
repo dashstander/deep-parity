@@ -164,11 +164,11 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
 
         optimizer.zero_grad()
         
-        if step % 200 == 0:
+        if step % 100_000 == 0:
             linear_data = fourier_analysis(model, n, step)
             msg.update(linear_data)
            
-        if step % 1_000 == 0:
+        if step % 500 == 0:
             train_loss_data.append(train_loss)
             test_loss_data.append(test_loss)
             model_state = copy.deepcopy(model.state_dict())
