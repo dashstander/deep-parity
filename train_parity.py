@@ -84,7 +84,7 @@ def fourier_analysis(model, n, epoch):
 def get_dataloaders(n, batch_size, frac_train, seed):
     sequences = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
     sequences = -1. * torch.sign(sequences - 0.5)
-    parities = ((sequences.prod(dim=1) + 1) / 2).to(torch.int64)
+    parities = -1 * ((sequences.prod(dim=1) - 1) / 2).to(torch.int64)
     data = TensorDataset(sequences, parities)
     train_data, test_data = random_split(
         data,
@@ -139,7 +139,7 @@ def endless_data_loader(data):
 def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
     train_config = config['train']
     n = config['model']['n']
-    checkpoint_dir = Path('checkpoints-1layer')
+    checkpoint_dir = Path('checkpoints-1layer-19')
     model_checkpoints = []
     opt_checkpoints = []
     train_loss_data = []
@@ -164,9 +164,9 @@ def train(model, optimizer, train_dataloader, test_dataloader, config, seed):
 
         optimizer.zero_grad()
         
-        if step % 100_000 == 0:
-            linear_data = fourier_analysis(model, n, step)
-            msg.update(linear_data)
+        #if step % 100_000 == 0:
+        #    linear_data = fourier_analysis(model, n, step)
+        #    msg.update(linear_data)
            
         if step % 500 == 0:
             train_loss_data.append(train_loss)
@@ -202,10 +202,10 @@ def main():
     ###########################
     # Configs
     ###########################
-    n = 20
+    n = 19
     batch_size = 2 ** 16
     frac_train = 0.95
-    model_dim = 4096
+    model_dim = 2048
     optimizer_params = {
         "lr" : 1e-4,
         "weight_decay" : 0.0,
@@ -226,7 +226,7 @@ def main():
         seed
     )
 
-    checkpoint_dir = Path('checkpoints-1layer')
+    checkpoint_dir = Path('checkpoints-1layer-19')
     checkpoint_dir.mkdir(exist_ok=True, parents=True)
  
 
