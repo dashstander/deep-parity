@@ -134,6 +134,8 @@ idna==3.7
     # via yarl
 importlib-metadata==8.2.0
     # via diffusers
+iprogress==0.4
+    # via deep-parity
 ipykernel==6.29.5
     # via deep-parity
     # via jupyterlab
@@ -412,6 +414,7 @@ six==1.16.0
     # via asttokens
     # via bleach
     # via docker-pycreds
+    # via iprogress
     # via patsy
     # via python-dateutil
     # via rfc3339-validator
