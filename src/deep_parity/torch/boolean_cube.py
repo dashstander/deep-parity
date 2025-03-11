@@ -39,4 +39,4 @@ def fourier_transform(u, normalize=True):
     x = u[..., np.newaxis]
     for _ in range(m)[::-1]:
         x = torch.cat((x[..., ::2, :] + x[..., 1::2, :], x[..., ::2, :] - x[..., 1::2, :]), dim=-1)
-    return x.squeeze(-2) / 2**(m / 2) if normalize else x.squeeze(-2)
+    return x.squeeze(-2) / 2**m if normalize else x.squeeze(-2)
