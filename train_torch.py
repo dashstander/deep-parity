@@ -8,8 +8,8 @@ from torch.utils.data import DataLoader, random_split, TensorDataset
 import tqdm.auto as tqdm
 import wandb
 
-from deep_parity.boolean_cube import fourier_transform, generate_all_binary_arrays
-from deep_parity.model import MLP, Perceptron
+from deep_parity.torch.boolean_cube import fourier_transform, generate_all_binary_arrays
+from deep_parity.torch.model import MLP, Perceptron
 
 
 def get_activations(model, n):

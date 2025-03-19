@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader, IterableDataset
 import tqdm.auto as tqdm
 import wandb
 
-from deep_parity.model import MLP
+from deep_parity.torch.model import MLP
 
 
 def generate_random_bits(batch_size, n):
