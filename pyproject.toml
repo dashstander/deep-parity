@@ -19,7 +19,9 @@ dependencies = [
     "seaborn>=0.13.2",
     "pynauty>=2.8.8.1",
     "iprogress>=0.4",
-    "anthropic>=0.46.0",
+    "jax>=0.5.2",
+    "equinox>=0.11.12",
+    "optax>=0.2.4",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
@@ -34,6 +36,11 @@ dev-dependencies = [
     "ruff>=0.5.5",
     "git-filter-repo>=2.45.0",
 ]
+
+[[tool.rye.sources]]
+name = "google-jax"
+url = "https://storage.googleapis.com/jax-releases/libtpu_releases.html"
+type = "find-links"
 
 [tool.hatch.metadata]
 allow-direct-references = true
