@@ -265,8 +265,6 @@ pycparser==2.22
 pygments==2.18.0
     # via ipython
     # via nbconvert
-pynauty==2.8.8.1
-    # via deep-parity
 pyparsing==3.1.2
     # via matplotlib
 python-dateutil==2.9.0.post0
