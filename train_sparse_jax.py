@@ -172,8 +172,9 @@ def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step,
     # Create checkpoint directory path
     n = config['model']['n']
     k = config['model']['k']
+    model_dim = config['model']['model_dim']
     seed = config['seed']
-    checkpoint_dir = Path(f"checkpoints-one-layer-n={n}-k={k}-seed={seed}") /f"{current_step}"
+    checkpoint_dir = Path(f"sparse/one-layer/model_dim={model_dim}/n={n}/k={k}/seed={seed}") /f"{current_step}"
 
     
     # Save model
@@ -218,8 +219,9 @@ def try_load_checkpoint(model_template, optimizer, bucket_name, config):
     # Find checkpoints
     n = config['model']['n']
     k = config['model']['k']
+    model_dim = config['model']['model_dim']
     seed = config['seed']
-    checkpoint_dir = f"checkpoints-one-layer-n={n}-k={k}-seed={seed}"
+    checkpoint_dir = f"sparse/one-layer/model_dim={model_dim}/n={n}/k={k}/seed={seed}"
     blobs = list(bucket.list_blobs(prefix=f"{checkpoint_dir}/model_"))
     
     if not blobs:
