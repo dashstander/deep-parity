@@ -25,6 +25,10 @@ def get_subcube(n, indices, values):
     return full_cube[subcube_indices, :]
 
 
+def generate_boolean_cube(n: int):
+    return np.sign(-1. * (generate_all_binary_arrays(n) - 0.5).astype(float))
+
+
 def fourier_transform(u, normalize=True):
     """Multiply H_n @ u where H_n is the Hadamard matrix of dimension n x n.
     n must be a power of 2.

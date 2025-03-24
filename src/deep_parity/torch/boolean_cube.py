@@ -15,6 +15,10 @@ def generate_all_binary_arrays(n: int):
     return ((numbers[:, np.newaxis] >> np.arange(n)[::-1]) & 1).astype(np.uint8)
 
 
+def generate_boolean_cube(n: int):
+    return np.sign(-1. * (generate_all_binary_arrays(n) - 0.5).astype(float))
+
+
 def get_subcube(n, indices, values):
     assert len(indices) == len(values) and len(indices) < n
     full_cube = torch.from_numpy(generate_all_binary_arrays(n)).to(torch.float32)
