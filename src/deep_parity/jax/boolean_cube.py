@@ -1,3 +1,4 @@
+from functools import partial
 import numpy as np
 import jax
 import jax.numpy as jnp
@@ -29,6 +30,7 @@ def generate_boolean_cube(n: int):
     return np.sign(-1. * (generate_all_binary_arrays(n) - 0.5).astype(float))
 
 
+@partial(jax.jit, in_axes=(0, None))
 def fourier_transform(u, normalize=True):
     """Multiply H_n @ u where H_n is the Hadamard matrix of dimension n x n.
     n must be a power of 2.
@@ -44,7 +46,7 @@ def fourier_transform(u, normalize=True):
     x = u[..., np.newaxis]
 
     def _step(_, tensor):
-        return jnp.cat((tensor[..., ::2, :] + tensor[..., 1::2, :], tensor[..., ::2, :] - tensor[..., 1::2, :]), dim=-1)
+        return jnp.concat((tensor[..., ::2, :] + tensor[..., 1::2, :], tensor[..., ::2, :] - tensor[..., 1::2, :]), dim=-1)
 
     fft = jax.lax.fori_loop(0, m, _step, x)
     return fft.squeeze(-2) / 2**m if normalize else x.squeeze(-2)
