@@ -1,34 +1,33 @@
-import copy
-import numpy as np
-from pathlib import Path
-import polars as pl
+from functools import partial
 import jax
 import jax.numpy as jnp
-from jax import grad, jit, vmap
 import equinox as eqx
+import numpy as np
 import optax
-from functools import partial
+from pathlib import Path
+import polars as pl
 import tqdm.auto as tqdm
 import wandb
 from google.cloud import storage
 
-from deep_parity.jax.boolean_cube import fourier_transform, generate_all_binary_arrays
+from deep_parity.jax.boolean_cube import fourier_transform, generate_boolean_cube
 from deep_parity.jax.model import Perceptron
 
 
-def get_activations(model, params, n):
-    batch_size = 2 ** 14
-    bits = jnp.array(generate_all_binary_arrays(n), dtype=jnp.float32)
-    activations = []
+def get_activations(model, n):
+    """Get activations for all binary arrays of length n"""
+    batch_size = 2 ** 16
+    bits = generate_boolean_cube(n)
     
     # Split into batches
     num_batches = (bits.shape[0] + batch_size - 1) // batch_size
     
-    @jit
+    @jax.jit
     def get_activations_batch(batch):
         # Extract the linear layer activations
-        return jax.nn.relu(model.apply_linear(params, batch))
+        return jax.nn.relu(model(batch))
     
+    activations = []
     for i in range(num_batches):
         start_idx = i * batch_size
         end_idx = min(start_idx + batch_size, bits.shape[0])
@@ -40,8 +39,9 @@ def get_activations(model, params, n):
 
 
 def make_base_parity_dataframe(n):
-    all_binary_data = generate_all_binary_arrays(n).astype(np.int32)
-    all_parities = all_binary_data.sum(axis=1) % 2
+    """Create base dataframe for Fourier analysis"""
+    all_binary_data = generate_boolean_cube(n)
+    all_parities = all_binary_data.prod(axis=1)
     base_df = pl.DataFrame({
         'bits': all_binary_data, 
         'parities': all_parities, 
@@ -54,6 +54,7 @@ def make_base_parity_dataframe(n):
 
 
 def calc_power_contributions(tensor, n, epoch):
+    """Calculate power contributions for Fourier analysis"""
     linear_dim = tensor.shape[1]
     base_df = make_base_parity_dataframe(n)
     centered_tensor = tensor - jnp.mean(tensor, axis=0, keepdims=True)
@@ -88,200 +89,390 @@ def calc_power_contributions(tensor, n, epoch):
     return powers
 
 
-def fourier_analysis(model, params, n, epoch):
-    linear_preacts = get_activations(model, params, n)
-    embed_power_df = calc_power_contributions(linear_preacts, n, epoch)
+def fourier_analysis(model, epoch):
+    """Perform Fourier analysis on the model"""
+    linear_preacts = get_activations(model, model.linear.in_features)
+    embed_power_df = calc_power_contributions(linear_preacts, model.linear.in_features, epoch)
     return embed_power_df
 
 
-def get_datasets(n, frac_train, seed):
-    key = jax.random.PRNGKey(seed)
-    sequences = jnp.array(generate_all_binary_arrays(n), dtype=jnp.float32)
-    sequences = -1. * jnp.sign(sequences - 0.5)
-    parities = -1 * ((jnp.prod(sequences, axis=1) - 1) / 2).astype(jnp.int32)
+def create_optimizer(config):
+    """Create optimizer with learning rate schedule"""
+    optimizer_params = config['optim']
     
-    # Shuffle the data
-    shuffle_key, key = jax.random.split(key)
-    indices = jax.random.permutation(shuffle_key, sequences.shape[0])
-    sequences = sequences[indices]
-    parities = parities[indices]
+    # Linear warmup and decay schedule
+    warmup_steps = config['train']['warmup_steps']
+    decay_steps = config['train']['decay_steps']
     
-    # Split into train and test
-    split_idx = int(frac_train * sequences.shape[0])
-    train_sequences, test_sequences = sequences[:split_idx], sequences[split_idx:]
-    train_parities, test_parities = parities[:split_idx], parities[split_idx:]
+    if warmup_steps > 0:
+        warmup_schedule = optax.linear_schedule(
+            init_value=0.0,
+            end_value=optimizer_params["learning_rate"],
+            transition_steps=warmup_steps
+        )
+        decay_schedule = optax.linear_schedule(
+            init_value=optimizer_params["learning_rate"],
+            end_value=0.0,
+            transition_steps=decay_steps
+        )
+        schedule = optax.join_schedules(
+            schedules=[warmup_schedule, decay_schedule],
+            boundaries=[warmup_steps]
+        )
+    else:
+        schedule = optimizer_params["learning_rate"]
     
-    return (train_sequences, train_parities), (test_sequences, test_parities)
-
-
-def get_batch(data, batch_size, step):
-    sequences, parities = data
-    idx = (step * batch_size) % (sequences.shape[0] - batch_size)
-    batch_sequences = sequences[idx:idx + batch_size]
-    batch_parities = parities[idx:idx + batch_size]
-    return batch_sequences, batch_parities
-
-
-def loss_fn(params, model, bits, labels):
-    logits = model.apply(params, bits)
-    if len(logits.shape) == 3:
-        logits = logits[:, -1]
-    log_probs = jax.nn.log_softmax(logits, axis=-1)
-    one_hot_labels = jax.nn.one_hot(labels, 2)
-    return -jnp.mean(jnp.sum(one_hot_labels * log_probs, axis=-1))
-
-
-@jit
-def train_step(params, opt_state, model, batch):
-    bits, labels = batch
-    
-    def compute_loss_and_grads(params):
-        loss = loss_fn(params, model, bits, labels)
-        return loss, loss
-    
-    (loss, _), grads = jax.value_and_grad(compute_loss_and_grads, has_aux=True)(params)
-    updates, opt_state = optimizer.update(grads, opt_state, params)
-    params = optax.apply_updates(params, updates)
-    
-    return params, opt_state, loss
-
-
-@jit
-def eval_step(params, model, batch):
-    bits, labels = batch
-    loss = loss_fn(params, model, bits, labels)
-    return loss
-
-
-def save_checkpoint_to_gcs(bucket_name, checkpoint, checkpoint_path):
-    """Save a checkpoint to Google Cloud Storage bucket."""
-    client = storage.Client()
-    bucket = client.get_bucket(bucket_name)
-    blob = bucket.blob(checkpoint_path)
-    
-    # Convert JAX arrays in checkpoint to numpy arrays for serialization
-    checkpoint_np = jax.tree_map(
-        lambda x: np.array(x) if isinstance(x, jax.Array) else x,
-        checkpoint
+    # Combine optimizers
+    optimizer = optax.chain(
+        optax.clip_by_global_norm(optimizer_params.get("max_grad_norm", 1.0)),
+        optax.adamw(
+            learning_rate=schedule,
+            weight_decay=optimizer_params["weight_decay"],
+            b1=optimizer_params["b1"],
+            b2=optimizer_params["b2"]
+        )
     )
     
-    # Save to a temporary file first
-    temp_path = f"/tmp/{Path(checkpoint_path).name}"
-    np.savez(temp_path, **{"checkpoint": checkpoint_np})
+    return optimizer
+
+
+def make_batch_iterator(X, y, batch_size, n_devices):
+    """Create batches suitable for TPU training"""
+    dataset_size = len(X)
+    steps_per_epoch = max(1, dataset_size // batch_size)
+    per_device_batch = batch_size // n_devices
     
-    # Upload to GCS
-    blob.upload_from_filename(temp_path)
-    print(f"Saved checkpoint to gs://{bucket_name}/{checkpoint_path}")
+    def data_iterator(key):
+        while True:
+            key, subkey = jax.random.split(key)
+            perm = jax.random.permutation(subkey, dataset_size)
+            for i in range(steps_per_epoch):
+                batch_idx = perm[i * batch_size:(i + 1) * batch_size]
+                batch_x = X[batch_idx].reshape(n_devices, per_device_batch, -1)
+                batch_y = y[batch_idx].reshape(n_devices, per_device_batch)
+                yield jnp.array(batch_x), jnp.array(batch_y)
+                
+    return data_iterator
 
 
-def train(model, params, optimizer, opt_state, train_data, test_data, config, seed):
-    train_config = config['train']
+def evaluate_model(model, X_test, y_test, n_devices):
+    """Evaluate model on test set ensuring TPU compatibility"""
+    # Make sure test data size is divisible by n_devices
+    test_size = X_test.shape[0]
+    padded_size = ((test_size + n_devices - 1) // n_devices) * n_devices
+    
+    # Pad the test data if needed
+    if test_size < padded_size:
+        # Create padding
+        pad_size = padded_size - test_size
+        pad_X = jnp.zeros((pad_size,) + X_test.shape[1:])
+        pad_y = jnp.zeros(pad_size)
+        
+        # Concatenate padding
+        X_padded = jnp.concatenate([X_test, pad_X], axis=0)
+        y_padded = jnp.concatenate([y_test, pad_y], axis=0)
+    else:
+        X_padded = X_test
+        y_padded = y_test
+    
+    # Reshape for PMapped evaluation
+    per_device = padded_size // n_devices
+    X_reshaped = X_padded.reshape(n_devices, per_device, -1)
+    y_reshaped = y_padded.reshape(n_devices, per_device)
+    
+    # Run evaluation
+    padded_loss = eval_step(model, X_reshaped, y_reshaped)
+    
+    # Average loss (all devices return same value due to pmean in eval_step)
+    return jnp.mean(padded_loss)
+
+
+def compute_loss(model, batch_x, batch_y):
+    pred = model(batch_x)
+    
+    targets_one_hot = jax.nn.one_hot(
+        (batch_y == 1.).astype(int),
+        num_classes=2
+    )
+    
+    per_example_loss = optax.softmax_cross_entropy(
+        pred,
+        targets_one_hot
+    )
+    
+    # Compute entropy of predictions
+    
+    losses = jnp.mean(per_example_loss, axis=0)
+    return jnp.mean(losses)
+
+
+def _train_step(optimizer, model, opt_state, batch_x, batch_y):
+    """Training step with gradient update (pmap for TPU parallelism)"""
+    loss, grads = eqx.filter_value_and_grad(compute_loss)(model, batch_x, batch_y)
+    
+    # Average gradients across devices
+    grads = jax.lax.pmean(grads, axis_name='batch')
+    loss = jax.lax.pmean(loss, axis_name='batch')
+    
+    # Apply updates
+    updates, new_opt_state = optimizer.update(grads, opt_state, eqx.filter(model, eqx.is_inexact_array))
+    new_model = eqx.apply_updates(model, updates)
+    
+    return new_model, new_opt_state, loss
+
+
+@partial(jax.pmap, axis_name='batch')
+def eval_step(model, batch_x, batch_y):
+    """Evaluation step (pmap for TPU parallelism)"""
+    loss = compute_loss(model, batch_x, batch_y)
+    return jax.lax.pmean(loss, axis_name='batch')
+
+
+def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step, config):
+    """Save a checkpoint to Google Cloud Storage bucket"""
+    client = storage.Client()
+    bucket = client.get_bucket(bucket_name)
+    
+    # Create checkpoint directory path
     n = config['model']['n']
-    bucket_name = "deep-parity-training-0"
-    checkpoint_dir = f"checkpoints-1layer-{n}"
+    seed = config['seed']
+    checkpoint_dir = Path(f"checkpoints-one-layer-n={n}-seed={seed}") /f"{current_step}"
+
     
-    model_checkpoints = []
-    opt_checkpoints = []
-    train_loss_data = []
-    test_loss_data = []
+    # Save model
+    model_local_path = f"/tmp/model_{current_step}.eqx"
+    eqx.tree_serialise_leaves(model_local_path, jax.device_get(jax.tree.map(lambda x: x[0], model)))
+    
+    model_blob = bucket.blob(checkpoint_dir / f"model_{current_step}.eqx")
+    model_blob.upload_from_filename(model_local_path)
+    
+    # Save optimizer state
+    opt_local_path = f"/tmp/opt_{current_step}.eqx"
+    eqx.tree_serialise_leaves(opt_local_path, jax.device_get(jax.tree.map(lambda x: x[0], opt_state)))
+    
+    opt_blob = bucket.blob(checkpoint_dir / f"opt_{current_step}.eqx")
+    opt_blob.upload_from_filename(opt_local_path)
+    
+    # Save RNG key
+    rng_local_path = f"/tmp/rng_{current_step}.npy"
+    with open(rng_local_path, "wb") as f:
+        np.save(f, jax.device_get(rng_key))
+    
+    rng_blob = bucket.blob(checkpoint_dir / f"rng_{current_step}.npy")
+    rng_blob.upload_from_filename(rng_local_path)
+    
+    # Save metadata
+    meta_local_path = f"/tmp/meta_{current_step}.npy"
+    meta = {"step": current_step, "config": config}
+    with open(meta_local_path, "wb") as f:
+        np.save(f, meta)
+    
+    meta_blob = bucket.blob(checkpoint_dir / f"meta_{current_step}.npy")
+    meta_blob.upload_from_filename(meta_local_path)
+    
+    print(f"Saved checkpoint to gs://{bucket_name}/{checkpoint_dir} at step {current_step}")
 
+
+def try_load_checkpoint(model_template, optimizer, bucket_name, config):
+    """Try to load the latest checkpoint from GCS bucket"""
+    client = storage.Client()
+    bucket = client.get_bucket(bucket_name)
+    
+    # Find checkpoints
+    n = config['model']['n']
+    checkpoint_dir = f"checkpoints-1layer-{n}"
+    blobs = list(bucket.list_blobs(prefix=f"{checkpoint_dir}/model_"))
+    
+    if not blobs:
+        print("No checkpoints found, starting fresh training")
+        return None
+    
+    # Extract step numbers and find the latest
+    steps = []
+    for blob in blobs:
+        filename = blob.name.split('/')[-1]
+        if filename.startswith('model_') and filename.endswith('.eqx'):
+            step = int(filename[6:-4])  # Extract step number
+            steps.append(step)
+    
+    if not steps:
+        return None
+    
+    latest_step = max(steps)
+    print(f"Found checkpoint at step {latest_step}")
+    
+    # Download latest checkpoint files
+    model_blob = bucket.blob(f"{checkpoint_dir}/model_{latest_step}.eqx")
+    model_local_path = f"/tmp/model_{latest_step}.eqx"
+    model_blob.download_to_filename(model_local_path)
+    
+    opt_blob = bucket.blob(f"{checkpoint_dir}/opt_{latest_step}.eqx")
+    opt_local_path = f"/tmp/opt_{latest_step}.eqx"
+    opt_blob.download_to_filename(opt_local_path)
+    
+    rng_blob = bucket.blob(f"{checkpoint_dir}/rng_{latest_step}.eqx")
+    rng_local_path = f"/tmp/rng_{latest_step}.npy"
+    try:
+        rng_blob.download_to_filename(rng_local_path)
+    except:
+        # If RNG file doesn't exist, create a new key
+        print("RNG key not found, creating new one")
+        rng_key = jax.random.PRNGKey(config['seed'])
+    else:
+        with open(rng_local_path, "rb") as f:
+            rng_key = np.load(f)
+    
+    # Deserialize model and optimizer state
+    model = eqx.tree_deserialise_leaves(model_local_path, model_template)
+    
+    # Initialize optimizer state with the model template to get the structure
+    dummy_opt_state = optimizer.init(eqx.filter(model_template, eqx.is_inexact_array))
+    opt_state = eqx.tree_deserialise_leaves(opt_local_path, dummy_opt_state)
+    
+    return model, opt_state, rng_key, latest_step
+
+
+def train(config):
+    """Main training function"""
+    n = config['model']['n']
+    model_dim = config['model']['model_dim']
+    batch_size = config['train']['batch_size']
+    num_steps = config['train']['num_steps']
+    bucket_name = "deep-parity-training-0"
+    
     # Set up RNG key
+    seed = config['seed']
     key = jax.random.PRNGKey(seed)
+    
+    # Count devices for data parallelism
+    n_devices = jax.device_count()
+    per_device_batch = batch_size // n_devices
+    print(f"Using {n_devices} devices with {per_device_batch} examples per device")
+    
+    # Generate dataset
+    print("Generating dataset...")
+    key, data_key = jax.random.split(key)
+    
+    # Generate all binary arrays and their parities
+    sequences = generate_boolean_cube(n)
+    parities = sequences.prod(axis=1)
+    
+    # Shuffle and split data
+    num_examples = sequences.shape[0]
+    indices = jax.random.permutation(data_key, num_examples)
+    split_idx = int(config['train']['frac_train'] * num_examples)
+    
+    train_indices = indices[:split_idx]
+    test_indices = indices[split_idx:]
+    
+    X_train, y_train = sequences[train_indices], parities[train_indices]
+    X_test, y_test = sequences[test_indices], parities[test_indices]
+    
+    print(f"Train set: {X_train.shape[0]} examples")
+    print(f"Test set: {X_test.shape[0]} examples")
+    
+    # Create optimizer
+    print("Creating optimizer...")
+    optimizer = create_optimizer(config)
+    
+    # Initialize model
+    print("Initializing model...")
+    key, model_key = jax.random.split(key)
+    model = Perceptron(n, model_dim, model_key)
+    
+    # Try to load checkpoint
+   #checkpoint = try_load_checkpoint(model_template, optimizer, bucket_name, config)
+    
 
-    for step in tqdm.tqdm(range(train_config['num_steps'])):
+    # Initialize new model and optimizer state
+    opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
+    current_step = 0
+    
+    # Replicate model and optimizer state across devices
+    model = jax.device_put_replicated(model, jax.devices())
+    opt_state = jax.device_put_replicated(opt_state, jax.devices())
+    
+    # Create data iterators
+    print("Creating data iterators...")
+    key, train_key = jax.random.split(key)
+    train_iterator = make_batch_iterator(
+        X_train, y_train, batch_size, n_devices
+    )
+
+    
+    train_iter = train_iterator(train_key)
+    
+    # Training loop
+    print(f"Starting training for {num_steps} steps...")
+    train_losses = []
+    test_losses = []
+
+    train_step = jax.pmap(partial(_train_step, optimizer), axis_name='batch')
+    
+    for step in tqdm.tqdm(range(current_step, num_steps)):
         # Get batch
-        batch_size = train_config['batch_size']
-        train_batch = get_batch(train_data, batch_size, step)
+        train_x, train_y = next(train_iter)
         
         # Train step
-        params, opt_state, train_loss = train_step(params, opt_state, model, train_batch)
+        #print('About to take a step')
+        model, opt_state, train_loss = train_step(model, opt_state, train_x, train_y)
+        train_loss_value = jnp.mean(train_loss).item()
+        train_losses.append(train_loss_value)
+        #print('Took a single step')
         
-        msg = {'loss/train': float(train_loss)}
-
-        # Eval step
-        test_batch = get_batch(test_data, batch_size, step)
-        test_loss = eval_step(params, model, test_batch)
-        msg['loss/test'] = float(test_loss)
+        # Log training progress
+        msg = {'loss/train': train_loss_value, 'step': step}
         
-        # Fourier analysis (occasionally)
-        # if step % 100_000 == 0:
-        #     linear_data = fourier_analysis(model, params, n, step)
-        #     msg.update(linear_data)
-        
-        # Save checkpoint
-        if step % 500 == 0:
-            train_loss_data.append(float(train_loss))
-            test_loss_data.append(float(test_loss))
+        # Evaluate on test set periodically
+        if step % 100 == 0 and step > 0:
             
-            # Create checkpoint
-            checkpoint = {
-                "params": params,
-                "opt_state": opt_state,
-                "config": config['model'],
-                "rng": np.array(key),  # JAX PRNGKey needs to be converted to numpy
-                "step": step
-            }
+            #print(f'Doing eval')
+            test_loss = evaluate_model(model, X_test, y_test, n_devices)
+            test_loss_value = jnp.mean(test_loss).item()
+            #print(f'Did eval')
+            test_losses.append(test_loss_value)
+            msg['loss/test'] = test_loss_value
             
-            # Save checkpoint to GCS bucket
-            checkpoint_path = f"{checkpoint_dir}/{step}.npz"
-            save_checkpoint_to_gcs(bucket_name, checkpoint, checkpoint_path)
-            
-            # Keep checkpoint in memory
-            model_checkpoints.append(copy.deepcopy(params))
-            opt_checkpoints.append(copy.deepcopy(opt_state))
-        
-        # Update RNG key
-        key, _ = jax.random.split(key)
+            # Fourier analysis
+            # Uncomment to enable Fourier analysis (can be slow)
+            if step % 1_000 == 0:
+                unreplicated_model = jax.device_get(jax.tree.map(lambda x: x[0], model))
+                fourier_data = fourier_analysis(unreplicated_model, step)
+                for degree, values in fourier_data.items():
+                    msg[f"fourier/{degree}"] = jnp.mean(values)
         
         wandb.log(msg)
-
-    # Save final model
-    final_checkpoint = {
-        "params": params,
-        "config": config['model'],
-        "checkpoints": model_checkpoints,
-    }
+        #print(f'did logging')
+        # Save checkpoint
+        if step % 1_000 == 0 and step:
+            #print('doing checkpointing')
+            save_checkpoint_to_gcs(bucket_name, model, opt_state, key, step, config)
     
-    save_checkpoint_to_gcs(bucket_name, final_checkpoint, f"{checkpoint_dir}/full_run.npz")
+    # Save final model
+    save_checkpoint_to_gcs(bucket_name, model, opt_state, key, num_steps, config)
+    print("Training completed!")
 
 
 def main():
     ###########################
-    # Configs
+    # Configurations
     ###########################
-    n = 18
-    batch_size = 2 ** 16
-    frac_train = 0.95
+    n = 20
+    batch_size = 2 ** 18
+    frac_train = 0.90
     model_dim = 2048
     optimizer_params = {
         "learning_rate": 1e-4,
         "weight_decay": 0.0,
         "b1": 0.9,
-        "b2": 0.98
+        "b2": 0.98,
+        "max_grad_norm": 1.0
     }
     num_steps = 50_000
+    warmup_steps = 100  # Set to 0 to disable warmup
+    decay_steps = num_steps - warmup_steps
     seed = 0
-    #############################
-
-    # Set JAX seed
-    key = jax.random.PRNGKey(seed)
-    
-    # Prepare dataset
-    train_data, test_data = get_datasets(n, frac_train, seed)
-    
-    # Initialize model
-    init_key, key = jax.random.split(key)
-    model = Perceptron(n, model_dim)
-    params = model.init(init_key)
-    
-    # Initialize optimizer
-    optimizer = optax.adamw(
-        learning_rate=optimizer_params["learning_rate"],
-        weight_decay=optimizer_params["weight_decay"],
-        b1=optimizer_params["b1"],
-        b2=optimizer_params["b2"]
-    )
-    opt_state = optimizer.init(params)
+    ###########################
     
     config = {
         "model": {
@@ -292,30 +483,24 @@ def main():
         "train": {
             "batch_size": batch_size,
             "frac_train": frac_train,
-            "num_steps": num_steps
-        }
+            "num_steps": num_steps,
+            "warmup_steps": warmup_steps,
+            "decay_steps": decay_steps
+        },
+        "seed": seed
     }
     
     wandb.init(
         entity='dstander',
-        group="parity-1Layer-jax",
-        project="deep-parity",
+        group="parity-1Layer",
+        project="deep-parity-jax",
         config=config
     )
     
     try:
-        train(
-            model,
-            params,
-            optimizer,
-            opt_state,
-            train_data,
-            test_data,
-            config,
-            seed
-        )
+        train(config)
     except KeyboardInterrupt:
-        pass
+        print("Training interrupted")
     
     wandb.finish()
 
