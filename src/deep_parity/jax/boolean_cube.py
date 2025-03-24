@@ -45,8 +45,7 @@ def fourier_transform(u, normalize=True):
     assert n == 1 << m, 'n must be a power of 2'
     x = u[..., np.newaxis]
 
-    def _step(_, tensor):
-        return jnp.concat((tensor[..., ::2, :] + tensor[..., 1::2, :], tensor[..., ::2, :] - tensor[..., 1::2, :]), dim=-1)
+    for _ in range(m):
+        x = jnp.concat((x[..., ::2, :] + x[..., 1::2, :], x[..., ::2, :] - x[..., 1::2, :]), axis=-1)
 
-    fft = jax.lax.fori_loop(0, m, _step, x)
-    return fft.squeeze(-2) / 2**m if normalize else x.squeeze(-2)
+    return x.squeeze(-2) / 2**m if normalize else x.squeeze(-2)
