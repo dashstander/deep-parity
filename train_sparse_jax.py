@@ -286,6 +286,8 @@ def train(config):
     batch_size = config['train']['batch_size']
     num_steps = config['train']['num_steps']
     bucket_name = "deep-parity-training-0"
+
+    checkpoint_steps = list(range(0, 1000, 20)) + list(range(1000, num_steps + 1, 1000))
     
     # Set up RNG key
     seed = config['seed']
@@ -384,7 +386,7 @@ def train(config):
         wandb.log(msg)
         
         # Save checkpoint
-        if step % 1_000 == 0 and step:
+        if step in checkpoint_steps:
             save_checkpoint_to_gcs(bucket_name, model, opt_state, key, step, config)
     
     # Save final model
