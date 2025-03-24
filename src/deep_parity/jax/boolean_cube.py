@@ -30,7 +30,7 @@ def generate_boolean_cube(n: int):
     return np.sign(-1. * (generate_all_binary_arrays(n) - 0.5).astype(float))
 
 
-@partial(jax.jit, in_axes=(0, None))
+@partial(jax.jit, static_argnums=1)
 def fourier_transform(u, normalize=True):
     """Multiply H_n @ u where H_n is the Hadamard matrix of dimension n x n.
     n must be a power of 2.
