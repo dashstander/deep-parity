@@ -243,7 +243,7 @@ def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step,
     n = config['model']['n']
     model_dim = config['model']['model_dim']
     seed = config['seed']
-    checkpoint_dir = f"full/one-layer/model_dim={model_dim}/n={n}/seed={seed}"
+    checkpoint_dir = Path(f"full/one-layer/model_dim={model_dim}/n={n}/seed={seed}")
     
     # Save model
     model_local_path = f"/tmp/model_{current_step}.eqx"
