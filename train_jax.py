@@ -31,7 +31,7 @@ def get_activations(model, n):
     @jax.jit
     def get_activations_batch(batch):
         # Extract the linear layer activations
-        return jax.nn.relu(model.linear(batch))
+        return jax.nn.relu(jax.vmap(model.linear)(batch))
     
     activations = []
     for i in range(num_batches):
