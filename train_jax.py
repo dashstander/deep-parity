@@ -16,7 +16,7 @@ from deep_parity.jax.model import Perceptron
 
 def get_activations(model, n):
     """Get activations for all binary arrays of length n"""
-    batch_size = 2 ** 16
+    batch_size = 2 ** 17
     bits = generate_boolean_cube(n)
     
     # Split into batches
@@ -25,7 +25,7 @@ def get_activations(model, n):
     @jax.jit
     def get_activations_batch(batch):
         # Extract the linear layer activations
-        return jax.nn.relu(model(batch))
+        return jax.nn.relu(model.linear(batch))
     
     activations = []
     for i in range(num_batches):
@@ -442,7 +442,7 @@ def train(config):
                 unreplicated_model = jax.device_get(jax.tree.map(lambda x: x[0], model))
                 fourier_data = fourier_analysis(unreplicated_model, step)
                 for degree, values in fourier_data.items():
-                    msg[f"fourier/{degree}"] = jnp.mean(values)
+                    msg[f"fourier/{degree}"] = values
         
         wandb.log(msg)
         #print(f'did logging')
