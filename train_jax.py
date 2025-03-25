@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 from functools import partial
 import jax
 import jax.numpy as jnp
@@ -12,6 +13,11 @@ from google.cloud import storage
 
 from deep_parity.jax.boolean_cube import fourier_transform, generate_boolean_cube
 from deep_parity.jax.model import Perceptron
+
+
+parser = ArgumentParser()
+parser.add_argument('--seed', type=int)
+parser.add_argument('--n', type=int, default=20, help='Total number of bits')
 
 
 def get_activations(model, n):
@@ -509,4 +515,5 @@ def main(args):
 
 
 if __name__ == '__main__':
-    main()
+    args, _ = parser.parse_known_args()
+    main(args)
