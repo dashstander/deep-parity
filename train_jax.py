@@ -249,14 +249,14 @@ def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step,
     model_local_path = f"/tmp/model_{current_step}.eqx"
     eqx.tree_serialise_leaves(model_local_path, jax.device_get(jax.tree.map(lambda x: x[0], model)))
     
-    model_blob = bucket.blob(checkpoint_dir / f"model_{current_step}.eqx")
+    model_blob = bucket.blob(str(checkpoint_dir / f"model_{current_step}.eqx"))
     model_blob.upload_from_filename(model_local_path)
     
     # Save optimizer state
     opt_local_path = f"/tmp/opt_{current_step}.eqx"
     eqx.tree_serialise_leaves(opt_local_path, jax.device_get(jax.tree.map(lambda x: x[0], opt_state)))
     
-    opt_blob = bucket.blob(checkpoint_dir / f"opt_{current_step}.eqx")
+    opt_blob = bucket.blob(str(checkpoint_dir / f"opt_{current_step}.eqx"))
     opt_blob.upload_from_filename(opt_local_path)
     
     # Save RNG key
@@ -264,7 +264,7 @@ def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step,
     with open(rng_local_path, "wb") as f:
         np.save(f, jax.device_get(rng_key))
     
-    rng_blob = bucket.blob(checkpoint_dir / f"rng_{current_step}.npy")
+    rng_blob = bucket.blob(str(checkpoint_dir / f"rng_{current_step}.npy"))
     rng_blob.upload_from_filename(rng_local_path)
     
     # Save metadata
@@ -273,7 +273,7 @@ def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step,
     with open(meta_local_path, "wb") as f:
         np.save(f, meta)
     
-    meta_blob = bucket.blob(checkpoint_dir / f"meta_{current_step}.npy")
+    meta_blob = bucket.blob(str(checkpoint_dir / f"meta_{current_step}.npy"))
     meta_blob.upload_from_filename(meta_local_path)
     
     print(f"Saved checkpoint to gs://{bucket_name}/{checkpoint_dir} at step {current_step}")
