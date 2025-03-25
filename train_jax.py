@@ -22,7 +22,7 @@ parser.add_argument('--n', type=int, default=20, help='Total number of bits')
 
 def get_activations(model, n):
     """Get activations for all binary arrays of length n"""
-    batch_size = 2 ** 14
+    batch_size = 2 ** 10
     bits = generate_boolean_cube(n)
     
     # Split into batches
