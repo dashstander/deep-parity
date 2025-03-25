@@ -59,7 +59,7 @@ def calc_power_contributions(tensor, n, epoch):
         .rename({'value': 'power'})
     )
     powers = {}
-    for i in range(1, n):
+    for i in range(1, n+1):
         power_df = (
             data.filter(pl.col('degree') == i)
             .select(pl.exclude('bits', 'parities', 'indices', 'degree'))

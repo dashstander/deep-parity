@@ -73,7 +73,7 @@ def calc_power_contributions(tensor, n, epoch):
         .rename({'value': 'power'})
     )
     powers = {}
-    for i in range(1, n):
+    for i in range(1, n+1):
         power_df = (
             data.filter(pl.col('degree') == i)
             .select(pl.exclude('bits', 'parities', 'indices', 'degree'))
@@ -233,11 +233,11 @@ def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step,
     client = storage.Client()
     bucket = client.get_bucket(bucket_name)
     
-    # Create checkpoint directory path
+    # Find checkpoints
     n = config['model']['n']
+    model_dim = config['model']['model_dim']
     seed = config['seed']
-    checkpoint_dir = Path(f"checkpoints-one-layer-n={n}-seed={seed}") /f"{current_step}"
-
+    checkpoint_dir = f"full/one-layer/model_dim={model_dim}/n={n}/seed={seed}"
     
     # Save model
     model_local_path = f"/tmp/model_{current_step}.eqx"
@@ -343,6 +343,9 @@ def train(config):
     # Set up RNG key
     seed = config['seed']
     key = jax.random.PRNGKey(seed)
+
+    checkpoint_steps = list(range(0, 1000, 20)) + list(range(1000, num_steps + 1, 1000))
+
     
     # Count devices for data parallelism
     n_devices = jax.device_count()
@@ -444,7 +447,7 @@ def train(config):
         wandb.log(msg)
         #print(f'did logging')
         # Save checkpoint
-        if step % 1_000 == 0 and step:
+        if step in checkpoint_steps:
             #print('doing checkpointing')
             save_checkpoint_to_gcs(bucket_name, model, opt_state, key, step, config)
     
@@ -453,11 +456,12 @@ def train(config):
     print("Training completed!")
 
 
-def main():
+def main(args):
     ###########################
     # Configurations
     ###########################
-    n = 20
+    seed = args.seed
+    n = args.n
     batch_size = 2 ** 18
     frac_train = 0.90
     model_dim = 2048
@@ -468,10 +472,9 @@ def main():
         "b2": 0.98,
         "max_grad_norm": 1.0
     }
-    num_steps = 50_000
+    num_steps = 20_000
     warmup_steps = 100  # Set to 0 to disable warmup
     decay_steps = num_steps - warmup_steps
-    seed = 0
     ###########################
     
     config = {
