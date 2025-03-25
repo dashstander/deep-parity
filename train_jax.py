@@ -444,11 +444,11 @@ def train(config):
             
             # Fourier analysis
             # Uncomment to enable Fourier analysis (can be slow)
-            if step % 1_000 == 0:
-                unreplicated_model = jax.device_get(jax.tree.map(lambda x: x[0], model))
-                fourier_data = fourier_analysis(unreplicated_model, step)
-                for degree, values in fourier_data.items():
-                    msg[f"fourier/{degree}"] = values
+            #if step % 1_000 == 0:
+            #    unreplicated_model = jax.device_get(jax.tree.map(lambda x: x[0], model))
+            #    fourier_data = fourier_analysis(unreplicated_model, step)
+            #    for degree, values in fourier_data.items():
+            #        msg[f"fourier/{degree}"] = values
         
         wandb.log(msg)
         #print(f'did logging')
