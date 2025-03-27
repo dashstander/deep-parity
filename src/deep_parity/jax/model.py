@@ -8,9 +8,9 @@ class Perceptron(eqx.Module):
     linear: eqx.Module
     unembed: eqx.Module
 
-    def __init__(self, n: int, model_dim: int, key):
+    def __init__(self, n: int, model_dim: int, key, use_bias=True):
         linear_key, unembed_key = jax.random.split(key)
-        self.linear = eqx.nn.Linear(in_features=n, out_features=model_dim, key=linear_key)
+        self.linear = eqx.nn.Linear(in_features=n, out_features=model_dim, use_bias=use_bias, key=linear_key)
         self.unembed = eqx.nn.Linear(in_features=model_dim, out_features=2, use_bias=False, key=unembed_key)
     
     @partial(jax.vmap, in_axes=(None, 0))
