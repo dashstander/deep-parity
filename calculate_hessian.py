@@ -1,4 +1,5 @@
 
+from argparse import ArgumentParser
 import equinox as eqx
 from functools import partial
 from google.cloud import storage
@@ -8,12 +9,16 @@ import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P
 import numpy as np
 from pathlib import Path
-from tempfile import TemporaryFile 
 from tqdm import tqdm
 
 from deep_parity.jax.model import Perceptron
 from deep_parity.jax.boolean_cube import generate_boolean_cube
 
+
+parser = ArgumentParser()
+parser.add_argument('--seed', type=int)
+parser.add_argument('--n', type=int)
+parser.add_argument('--model_dim', type=int)
 
 def try_load_checkpoint(model_template, bucket_name, config, step):
     """Try to load the latest checkpoint from GCS bucket"""
@@ -92,10 +97,10 @@ def calculate_hessian(model, cube, parities, n):
 
 
 
-def main():
-    n = 20
-    model_dim = 128
-    seed = 0
+def main(args):
+    n = args.n
+    model_dim = args.model_im
+    seed = args.seed
     config = {'model': {'n': n, 'model_dim': model_dim}, 'seed': seed}
     model_bucket = "deep-parity-training-0"
     hessian_bucket = 'deep-parity-hessian'
@@ -115,4 +120,5 @@ def main():
 
     
 if __name__ == '__main__':
-    main()
+    args, _ = parser.parse_known_args()
+    main(args)
