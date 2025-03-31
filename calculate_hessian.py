@@ -57,16 +57,15 @@ def upload_hessian(tensor, bucket_name, config, step):
 
 
 @partial(jax.jit, static_argnums=1)
-def degree_n_character(weights, unravel_fn, tensor):
+def degree_n_character(weights, unravel_fn, tensor, parities):
     model = unravel_fn(weights)
     pred = model(tensor)
     logits = jax.nn.log_softmax(pred)[:, 1]
-    parities = jnp.expand_dims(tensor.prod(axis=-1), -1)
     # Compute entropy of predictions
     return jnp.mean(parities * logits)
 
 
-def calculate_hessian(model, cube, n):
+def calculate_hessian(model, cube, parities, n):
     n_devices = jax.device_count()
     mesh = jax.make_mesh((n_devices,), ('tensor',))
     sharded = jax.sharding.NamedSharding(mesh, P('tensor',))
@@ -85,6 +84,7 @@ def calculate_hessian(model, cube, n):
             weights,
             unravel_fn,
             jax.device_put(cube[i:j], sharded),
+            jax.device_put(parities[i:j], sharded),
         )
         full_hessian += hessian_batch
     
@@ -105,11 +105,12 @@ def main():
 
     steps = list(range(0, 2000, 20)) + list(range(2000, 30_000, 1000))
     cube = generate_boolean_cube(n)
+    parities = cube.prod(axis=1)
 
     for step in tqdm(steps):
 
         model = try_load_checkpoint(template, model_bucket, config, step)
-        hessian = calculate_hessian(model, cube, n)
+        hessian = calculate_hessian(model, cube, parities, n)
         upload_hessian(hessian, hessian_bucket, config, step)
 
     
