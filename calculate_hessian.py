@@ -99,7 +99,7 @@ def calculate_hessian(model, cube, parities, n):
 
 def main(args):
     n = args.n
-    model_dim = args.model_im
+    model_dim = args.model_dim
     seed = args.seed
     config = {'model': {'n': n, 'model_dim': model_dim}, 'seed': seed}
     model_bucket = "deep-parity-training-0"
