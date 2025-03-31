@@ -50,7 +50,7 @@ def upload_hessian(tensor, bucket_name, config, step):
     model_dim = config['model']['model_dim']
     checkpoint_dir = Path(f"full/one-layer/model_dim={model_dim}/n={n}/seed={seed}")
 
-    local_path = TemporaryFile()
+    local_path = f"/tmp/{step}.npy"
     np.save(local_path, np.array(tensor))
     model_blob = bucket.blob(str(checkpoint_dir / f"{step}/"))
     model_blob.upload_from_filename(local_path)
