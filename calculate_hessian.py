@@ -66,7 +66,7 @@ def degree_n_character(weights, unravel_fn, tensor):
     return jnp.mean(parities * logits)
 
 
-def calculate_hessian(model, cube, parities, n):
+def calculate_hessian(model, cube, n):
     n_devices = jax.device_count()
     mesh = jax.make_mesh((n_devices,), ('tensor',))
     sharded = jax.sharding.NamedSharding(mesh, P('tensor',))
@@ -85,7 +85,6 @@ def calculate_hessian(model, cube, parities, n):
             weights,
             unravel_fn,
             jax.device_put(cube[i:j], sharded),
-            jax.device_put(parities[i:j], sharded)
         )
         full_hessian += hessian_batch
     
@@ -106,12 +105,11 @@ def main():
 
     steps = list(range(0, 2000, 20)) + list(range(2000, 30_000, 1000))
     cube = generate_boolean_cube(n)
-    parities = cube.prod(axis=-1)
 
     for step in tqdm(steps):
 
         model = try_load_checkpoint(template, model_bucket, config, step)
-        hessian = calculate_hessian(model, cube, parities, n)
+        hessian = calculate_hessian(model, cube, n)
         upload_hessian(hessian, hessian_bucket, config, step)
 
     
