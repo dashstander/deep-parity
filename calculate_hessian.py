@@ -66,7 +66,6 @@ def degree_n_character(weights, unravel_fn, tensor):
     return jnp.mean(parities * logits)
 
 
-@jax.jit
 def calculate_hessian(model, cube, parities, n):
     n_devices = jax.device_count()
     mesh = jax.make_mesh((n_devices,), ('tensor',))
