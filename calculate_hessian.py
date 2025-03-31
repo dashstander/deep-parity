@@ -3,6 +3,7 @@ import equinox as eqx
 from functools import partial
 from google.cloud import storage
 import jax
+import jax.flatten_util
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P
 import numpy as np
@@ -72,7 +73,7 @@ def calculate_hessian(model, cube, parities, n):
     sharded = jax.sharding.NamedSharding(mesh, P('tensor',))
     replicated = jax.sharding.NamedSharding(mesh, P(None,))
 
-    weights, unravel_fn = jax.tree_flatten.ravel_pytree(model)
+    weights, unravel_fn = jax.flatten_util.ravel_pytree(model)
 
     weights = jax.device_put(weights, replicated)
     n_params = len(weights)
