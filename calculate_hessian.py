@@ -115,14 +115,5 @@ def main():
         upload_hessian(hessian, hessian_bucket, config, step)
 
     
-    
-    
-    
-
-    
-
-
-    
-
-
-
+if __name__ == '__main__':
+    main()
