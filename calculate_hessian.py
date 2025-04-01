@@ -20,6 +20,7 @@ parser.add_argument('--seed', type=int)
 parser.add_argument('--n', type=int)
 parser.add_argument('--model_dim', type=int)
 
+
 def try_load_checkpoint(model_template, bucket_name, config, step):
     """Try to load the latest checkpoint from GCS bucket"""
     client = storage.Client()
@@ -108,7 +109,7 @@ def main(args):
     key = jax.random.key(0)
     template = Perceptron(n, model_dim, key)
 
-    steps = list(range(0, 2000, 20)) + list(range(2000, 30_000, 1000))
+    steps = list(range(0, 2000, 20)) + list(range(2000, 30_001, 1000))
     cube = generate_boolean_cube(n)
     parities = cube.prod(axis=1)
 
