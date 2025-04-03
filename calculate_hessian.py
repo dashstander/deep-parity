@@ -128,7 +128,7 @@ def calculate_fim(model, cube, n):
             model,
             jax.device_put(cube[i:j], sharded),
         )
-        full_fisher_information += fim_batch
+        full_fisher_information += np.array(fim_batch, dtype=np.float64)
     
     return full_fisher_information
 
