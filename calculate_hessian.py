@@ -130,12 +130,11 @@ def main(args):
 
     steps = list(range(0, 2000, 20)) + list(range(2000, 30_001, 1000))
     cube = generate_boolean_cube(n)
-    parities = cube.prod(axis=1)
 
     for step in tqdm(steps):
 
         model = try_load_checkpoint(template, model_bucket, config, step)
-        hessian = calculate_fim(model, cube, parities, n)
+        hessian = calculate_fim(model, cube, n)
         upload_hessian(hessian, hessian_bucket, config, step)
 
     
