@@ -5,6 +5,7 @@ from functools import partial
 from google.cloud import storage
 import jax
 import jax.flatten_util
+from jax.nn import relu
 import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P
 import numpy as np
@@ -19,6 +20,22 @@ parser = ArgumentParser()
 parser.add_argument('--seed', type=int)
 parser.add_argument('--n', type=int)
 parser.add_argument('--model_dim', type=int)
+
+
+class Perceptron(eqx.Module):
+    linear: eqx.Module
+    unembed: eqx.Module
+
+    def __init__(self, n: int, model_dim: int, key, use_bias=True):
+        linear_key, unembed_key = jax.random.split(key)
+        self.linear = eqx.nn.Linear(in_features=n, out_features=model_dim, use_bias=use_bias, key=linear_key)
+        self.unembed = eqx.nn.Linear(in_features=model_dim, out_features=2, use_bias=False, key=unembed_key)
+    
+    def __call__(self, x):
+        preactivations = self.linear(x)
+        outputs = self.unembed(relu(preactivations))
+        return outputs
+
 
 
 def try_load_checkpoint(model_template, bucket_name, config, step):
