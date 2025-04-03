@@ -54,47 +54,66 @@ def upload_hessian(tensor, bucket_name, config, step):
     n = config['model']['n']
     seed = config['seed']
     model_dim = config['model']['model_dim']
-    checkpoint_dir = Path(f"full/one-layer/model_dim={model_dim}/n={n}/seed={seed}")
+    checkpoint_dir = Path(f"fisher_information_matrix/one-layer/model_dim={model_dim}/n={n}/seed={seed}")
 
     local_path = f"/tmp/{step}.npy"
-    np.save(local_path, np.array(tensor))
-    model_blob = bucket.blob(str(checkpoint_dir / f"{step}/"))
+    np.save(local_path, tensor)
+    model_blob = bucket.blob(str(checkpoint_dir / f"{step}/fim{step}.npy"))
     model_blob.upload_from_filename(local_path)
 
 
-@partial(jax.jit, static_argnums=1)
-def degree_n_character(weights, unravel_fn, tensor, parities):
-    model = unravel_fn(weights)
-    pred = model(tensor)
-    logits = jax.nn.log_softmax(pred)[:, 1]
-    # Compute entropy of predictions
-    return jnp.mean(parities * logits)
+def model_logits(model, tensor):
+    logits = jax.nn.log_softmax(model(tensor))
+    return logits
 
 
-def calculate_hessian(model, cube, parities, n):
+def softmax_jacobian(probs):
+    return jnp.diag(probs) - jnp.outer(probs, probs) 
+
+
+@partial(jax.vmap, in_axes=(None, 0))
+def softmax_gradient_outer_product(model, tensor):
+    n_classes = 2
+    
+    def grad_fn(idx):
+        vals, grads = jax.value_and_grad(lambda m, x: model_logits(m, x)[idx])(model, tensor)
+        flat_grads, _ = jax.flatten_util.ravel_pytree(grads)
+        return vals, flat_grads
+    
+    logits, gradients = jax.vmap(grad_fn)(jnp.arange(n_classes))
+    # I want it to have shape (n_params, n_classes)
+    gradients = gradients.T
+
+    # Amari calls it `Q` for some reason
+    Q = softmax_jacobian(jax.nn.softmax(logits))
+    return gradients @ Q @ gradients.T
+
+
+@jax.jit
+def fisher_information(model, tensor):
+    return softmax_gradient_outer_product(model, tensor).mean(axis=0)
+
+
+def calculate_fim(model, cube, n):
     n_devices = jax.device_count()
     mesh = jax.make_mesh((n_devices,), ('tensor',))
     sharded = jax.sharding.NamedSharding(mesh, P('tensor',))
     replicated = jax.sharding.NamedSharding(mesh, P(None,))
+    n_params = sum(p.size for p in jax.tree_util.tree_leaves(model))
 
-    weights, unravel_fn = jax.flatten_util.ravel_pytree(model)
+    full_fisher_information = np.zeros((n_params, n_params), dtype=np.float64)
 
-    weights = jax.device_put(weights, replicated)
-    n_params = len(weights)
-
-    full_hessian = jnp.zeros((n_params, n_params))
+    model = jax.device_put(model, replicated)
 
     for i in range(0, 2**n, 2**15):
         j = i + 2**15
-        hessian_batch = jax.hessian(degree_n_character)(
-            weights,
-            unravel_fn,
+        fim_batch = fisher_information(
+            model,
             jax.device_put(cube[i:j], sharded),
-            jax.device_put(parities[i:j], sharded),
         )
-        full_hessian += hessian_batch
+        full_fisher_information += fim_batch
     
-    return full_hessian
+    return full_fisher_information
 
 
 
@@ -116,7 +135,7 @@ def main(args):
     for step in tqdm(steps):
 
         model = try_load_checkpoint(template, model_bucket, config, step)
-        hessian = calculate_hessian(model, cube, parities, n)
+        hessian = calculate_fim(model, cube, parities, n)
         upload_hessian(hessian, hessian_bucket, config, step)
 
     
