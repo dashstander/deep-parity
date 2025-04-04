@@ -133,7 +133,6 @@ def calculate_fim(model, cube, n):
     return full_fisher_information
 
 
-
 def main(args):
     n = args.n
     model_dim = args.model_dim
