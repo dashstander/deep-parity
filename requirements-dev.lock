@@ -13,6 +13,8 @@
 absl-py==2.1.0
     # via chex
     # via optax
+algebraist @ git+https://github.com/dashstander/algebraist.git@08a89345641ebe5c7a596e8aa23cb2a9557b72ca
+    # via deep-parity
 anyio==4.4.0
     # via httpx
     # via jupyter-server
@@ -64,6 +66,8 @@ defusedxml==0.7.1
     # via nbconvert
 docker-pycreds==0.4.0
     # via wandb
+einops==0.8.1
+    # via algebraist
 equinox==0.11.12
     # via deep-parity
 etils==1.12.2
@@ -105,12 +109,13 @@ ipython==8.26.0
     # via ipykernel
 isoduration==20.11.0
     # via jsonschema
-jax==0.5.2
+jax==0.5.3
+    # via algebraist
     # via chex
     # via deep-parity
     # via equinox
     # via optax
-jaxlib==0.5.1
+jaxlib==0.5.3
     # via chex
     # via jax
     # via optax
@@ -200,7 +205,8 @@ networkx==3.4.2
     # via torch
 notebook-shim==0.2.4
     # via jupyterlab
-numpy==2.0.1
+numpy==2.2.4
+    # via algebraist
     # via chex
     # via contourpy
     # via deep-parity
@@ -372,7 +378,8 @@ tornado==6.4.1
     # via jupyter-server
     # via jupyterlab
     # via terminado
-tqdm==4.66.4
+tqdm==4.67.1
+    # via algebraist
     # via deep-parity
 traitlets==5.14.3
     # via comm
