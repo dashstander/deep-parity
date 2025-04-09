@@ -3,6 +3,7 @@ from functools import partial
 from itertools import product
 import jax
 import jax.numpy as jnp
+from jax.sharding import PartitionSpec as P
 import equinox as eqx
 import math
 import numpy as np
@@ -72,75 +73,56 @@ def create_optimizer(config):
     return optimizer
 
 
-def make_batch_iterator(X, y, batch_size, n_devices):
+def make_batch_iterator(X, y, batch_size, sharding):
     """Create batches suitable for TPU training"""
     dataset_size = len(X)
-    steps_per_epoch = max(1, dataset_size // batch_size)
-    per_device_batch = batch_size // n_devices
-    
-    def data_iterator(key):
-        while True:
-            key, subkey = jax.random.split(key)
-            perm = jax.random.permutation(subkey, dataset_size)
-            for i in range(steps_per_epoch):
-                batch_idx = perm[i * batch_size:(i + 1) * batch_size]
-                batch_x = X[batch_idx].reshape(n_devices, per_device_batch, -1)
-                batch_y = y[batch_idx].reshape(n_devices, per_device_batch)
-                yield jnp.array(batch_x), jnp.array(batch_y)
-                
-    return data_iterator
+    steps_per_epoch = dataset_size // batch_size
 
-
-def evaluate_model(model, X_test, y_test, n_devices):
-    """Evaluate model on test set ensuring TPU compatibility"""
-    # Make sure test data size is divisible by n_devices
-    test_size = X_test.shape[0]
-    padded_size = ((test_size + n_devices - 1) // n_devices) * n_devices
-    
-    # Pad the test data if needed
-    if test_size < padded_size:
-        # Create padding
-        pad_size = padded_size - test_size
-        pad_X = jnp.zeros((pad_size,) + X_test.shape[1:])
-        pad_y = jnp.zeros(pad_size)
+    if dataset_size <= batch_size:
+        def dumb_iterator(_):
+            while True:
+                yield jax.device_put(X, sharding), jax.device_put(y, sharding)
         
-        # Concatenate padding
-        X_padded = jnp.concatenate([X_test, pad_X], axis=0)
-        y_padded = jnp.concatenate([y_test, pad_y], axis=0)
+        return dumb_iterator
     else:
-        X_padded = X_test
-        y_padded = y_test
-    
-    # Reshape for PMapped evaluation
-    per_device = padded_size // n_devices
-    X_reshaped = X_padded.reshape(n_devices, per_device, -1)
-    y_reshaped = y_padded.reshape(n_devices, per_device)
-    
+        def data_iterator(key):
+            while True:
+                key, subkey = jax.random.split(key)
+                perm = jax.random.permutation(subkey, dataset_size)
+                for i in range(steps_per_epoch):
+                    batch_idx = perm[i * batch_size:(i + 1) * batch_size]
+                    batch_x = X[batch_idx]
+                    batch_y = y[batch_idx]
+                    yield jax.device_put(batch_x, sharding), jax.device_put(batch_y, sharding)
+                
+        return data_iterator
+
+@jax.jit
+def evaluate_model(model, X_test, y_test):    
     # Run evaluation
-    padded_loss = eval_step(model, X_reshaped, y_reshaped)
+    padded_loss = compute_loss(model, X_test, y_test)
     
     # Average loss (all devices return same value due to pmean in eval_step)
     return jnp.mean(padded_loss)
 
 
+@jax.jit
 def compute_loss(model, batch_x, batch_y, n):
     pred = model(batch_x)
-    
     targets_one_hot = jax.nn.one_hot(
         batch_y,
         num_classes=n
     )
-    
     loss = optax.softmax_cross_entropy(
         pred,
         targets_one_hot
     )
-    
     # Compute entropy of predictions
     return jnp.mean(loss)
 
 
-def _train_step(optimizer, model, opt_state, batch_x, batch_y):
+@partial(jax.jit, static_argnums=1)
+def train_step(model, optimizer, opt_state, batch_x, batch_y):
     """Training step with gradient update (pmap for TPU parallelism)"""
     loss, grads = eqx.filter_value_and_grad(compute_loss)(model, batch_x, batch_y)
     
@@ -155,9 +137,9 @@ def _train_step(optimizer, model, opt_state, batch_x, batch_y):
     return new_model, new_opt_state, loss
 
 
-@partial(jax.pmap, axis_name='batch')
+@jax.jit
 def eval_step(model, batch_x, batch_y):
-    """Evaluation step (pmap for TPU parallelism)"""
+    """Evaluation step"""
     loss = compute_loss(model, batch_x, batch_y)
     return jax.lax.pmean(loss, axis_name='batch')
 
@@ -287,6 +269,10 @@ def train(config):
     n_devices = jax.device_count()
     per_device_batch = batch_size // n_devices
     print(f"Using {n_devices} devices with {per_device_batch} examples per device")
+    mesh = jax.make_mesh((n_devices,), ('btach',))
+    sharded = jax.sharding.NamedSharding(mesh, P('batch',))
+    replicated = jax.sharding.NamedSharding(mesh, P(None,))
+
     
     # Generate dataset
     print("Generating dataset...")
@@ -318,6 +304,7 @@ def train(config):
     print("Initializing model...")
     key, model_key = jax.random.split(key)
     model = SnPerceptron(n, embed_dim, model_dim, model_key)
+    model = jax.device_put(model, replicated)
     
     # Try to load checkpoint
    #checkpoint = try_load_checkpoint(model_template, optimizer, bucket_name, config)
@@ -325,19 +312,16 @@ def train(config):
 
     # Initialize new model and optimizer state
     opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
+
+    model, opt_state = jax.device_put((model, opt_state), replicated)  
     current_step = 0
-    
-    # Replicate model and optimizer state across devices
-    model = jax.device_put_replicated(model, jax.devices())
-    opt_state = jax.device_put_replicated(opt_state, jax.devices())
     
     # Create data iterators
     print("Creating data iterators...")
-    key, train_key = jax.random.split(key)
+    key, train_key, test_key = jax.random.split(key, 3)
     train_iterator = make_batch_iterator(
-        X_train_left, X_train_right, y_train, batch_size, n_devices
+        X_train_left, X_train_right, y_train, batch_size, sharded
     )
-
     
     train_iter = train_iterator(train_key)
     
@@ -345,8 +329,6 @@ def train(config):
     print(f"Starting training for {num_steps} steps...")
     train_losses = []
     test_losses = []
-
-    train_step = jax.pmap(partial(_train_step, optimizer), axis_name='batch')
     
     for step in tqdm.tqdm(range(current_step, num_steps)):
         # Get batch
@@ -366,7 +348,12 @@ def train(config):
         if step % 100 == 0 and step > 0:
             
             #print(f'Doing eval')
-            test_loss = evaluate_model(model, X_test_left, X_test_right, y_test, n_devices)
+            test_loss = evaluate_model(
+                model,
+                jax.device_put(X_test_left),
+                jax.device_put(X_test_right),
+                jax.device_put(y_test)
+            )
             test_loss_value = jnp.mean(test_loss).item()
             #print(f'Did eval')
             test_losses.append(test_loss_value)
@@ -400,6 +387,7 @@ def main(args):
     n = args.n
     batch_size = 2 ** 18
     frac_train = 0.90
+    embed_dim = 128
     model_dim = 512
     optimizer_params = {
         "learning_rate": 1e-4,
@@ -417,6 +405,7 @@ def main(args):
         "model": {
             "n": n,
             "model_dim": model_dim,
+            "embed_dim": embed_dim
         },
         "optim": optimizer_params,
         "train": {
