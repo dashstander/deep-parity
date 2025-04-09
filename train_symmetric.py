@@ -27,7 +27,7 @@ parser.add_argument('--n', type=int, default=6, help='Total number of bits')
 
 def make_sn_dataset(n):
     Sn = Permutation.full_group(n)
-    indices = product(range(len(Sn)), repeat=2)
+    indices = list(product(range(len(Sn)), repeat=2))
     targets = [(Sn[i] * Sn[j]).permutation_index() for i, j in indices]
     X = jnp.array(indices)
     return X[:, 0], X[:, 1], jnp.array(targets)
@@ -37,51 +37,27 @@ def create_optimizer(config):
     """Create optimizer with learning rate schedule"""
     optimizer_params = config['optim']
     
-    # Linear warmup and decay schedule
-    warmup_steps = config['train']['warmup_steps']
-    decay_steps = config['train']['decay_steps']
-    
-    if warmup_steps > 0:
-        warmup_schedule = optax.linear_schedule(
-            init_value=0.0,
-            end_value=optimizer_params["learning_rate"],
-            transition_steps=warmup_steps
-        )
-        decay_schedule = optax.linear_schedule(
-            init_value=optimizer_params["learning_rate"],
-            end_value=0.0,
-            transition_steps=decay_steps
-        )
-        schedule = optax.join_schedules(
-            schedules=[warmup_schedule, decay_schedule],
-            boundaries=[warmup_steps]
-        )
-    else:
-        schedule = optimizer_params["learning_rate"]
-    
     # Combine optimizers
-    optimizer = optax.chain(
-        optax.clip_by_global_norm(optimizer_params.get("max_grad_norm", 1.0)),
-        optax.adamw(
-            learning_rate=schedule,
+    optimizer = optax.adamw(
+            learning_rate=optimizer_params["learning_rate"],
             weight_decay=optimizer_params["weight_decay"],
             b1=optimizer_params["b1"],
             b2=optimizer_params["b2"]
         )
-    )
+    
     
     return optimizer
 
 
-def make_batch_iterator(X, y, batch_size, sharding):
+def make_batch_iterator(X_left, X_right, y, batch_size, sharding):
     """Create batches suitable for TPU training"""
-    dataset_size = len(X)
+    dataset_size = len(X_right)
     steps_per_epoch = dataset_size // batch_size
 
     if dataset_size <= batch_size:
         def dumb_iterator(_):
             while True:
-                yield jax.device_put(X, sharding), jax.device_put(y, sharding)
+                yield jax.device_put((X_left, X_right), sharding), jax.device_put(y, sharding)
         
         return dumb_iterator
     else:
@@ -91,27 +67,19 @@ def make_batch_iterator(X, y, batch_size, sharding):
                 perm = jax.random.permutation(subkey, dataset_size)
                 for i in range(steps_per_epoch):
                     batch_idx = perm[i * batch_size:(i + 1) * batch_size]
-                    batch_x = X[batch_idx]
+                    batch_x = (X_left[batch_idx], X_right[batch_idx])
                     batch_y = y[batch_idx]
                     yield jax.device_put(batch_x, sharding), jax.device_put(batch_y, sharding)
                 
         return data_iterator
 
-@jax.jit
-def evaluate_model(model, X_test, y_test):    
-    # Run evaluation
-    padded_loss = compute_loss(model, X_test, y_test)
-    
-    # Average loss (all devices return same value due to pmean in eval_step)
-    return jnp.mean(padded_loss)
 
-
-@jax.jit
-def compute_loss(model, batch_x, batch_y, n):
-    pred = model(batch_x)
+@partial(jax.jit, static_argnums=4)
+def compute_loss(model, x_left, x_right, y, n):
+    pred = model(x_left, x_right)
     targets_one_hot = jax.nn.one_hot(
-        batch_y,
-        num_classes=n
+        y,
+        num_classes=math.factorial(n)
     )
     loss = optax.softmax_cross_entropy(
         pred,
@@ -121,27 +89,21 @@ def compute_loss(model, batch_x, batch_y, n):
     return jnp.mean(loss)
 
 
-@partial(jax.jit, static_argnums=1)
-def train_step(model, optimizer, opt_state, batch_x, batch_y):
+@partial(jax.jit, static_argnums=(1, 5))
+def train_step(model, optimizer, opt_state, batch_x, batch_y, n):
     """Training step with gradient update (pmap for TPU parallelism)"""
-    loss, grads = eqx.filter_value_and_grad(compute_loss)(model, batch_x, batch_y)
+    x_left, x_right = batch_x
+    loss, grads = eqx.filter_value_and_grad(compute_loss)(model, x_left, x_right, batch_y, n)
     
     # Average gradients across devices
-    grads = jax.lax.pmean(grads, axis_name='batch')
-    loss = jax.lax.pmean(loss, axis_name='batch')
+    #grads = jax.lax.pmean(grads, axis_name='batch')
+    #loss = jax.lax.pmean(loss, axis_name='batch')
     
     # Apply updates
     updates, new_opt_state = optimizer.update(grads, opt_state, eqx.filter(model, eqx.is_inexact_array))
     new_model = eqx.apply_updates(model, updates)
     
     return new_model, new_opt_state, loss
-
-
-@jax.jit
-def eval_step(model, batch_x, batch_y):
-    """Evaluation step"""
-    loss = compute_loss(model, batch_x, batch_y)
-    return jax.lax.pmean(loss, axis_name='batch')
 
 
 def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step, config):
@@ -158,14 +120,13 @@ def save_checkpoint_to_gcs(bucket_name, model, opt_state, rng_key, current_step,
     
     # Save model
     model_local_path = f"/tmp/model_{current_step}.eqx"
-    eqx.tree_serialise_leaves(model_local_path, jax.device_get(jax.tree.map(lambda x: x[0], model)))
-    
+    eqx.tree_serialise_leaves(model_local_path, model)
     model_blob = bucket.blob(str(checkpoint_dir / f"model_{current_step}.eqx"))
     model_blob.upload_from_filename(model_local_path)
     
     # Save optimizer state
     opt_local_path = f"/tmp/opt_{current_step}.eqx"
-    eqx.tree_serialise_leaves(opt_local_path, jax.device_get(jax.tree.map(lambda x: x[0], opt_state)))
+    eqx.tree_serialise_leaves(opt_local_path, opt_state)
     
     opt_blob = bucket.blob(str(checkpoint_dir / f"opt_{current_step}.eqx"))
     opt_blob.upload_from_filename(opt_local_path)
@@ -269,9 +230,9 @@ def train(config):
     n_devices = jax.device_count()
     per_device_batch = batch_size // n_devices
     print(f"Using {n_devices} devices with {per_device_batch} examples per device")
-    mesh = jax.make_mesh((n_devices,), ('btach',))
+    mesh = jax.make_mesh((n_devices,), ('batch',))
     sharded = jax.sharding.NamedSharding(mesh, P('batch',))
-    replicated = jax.sharding.NamedSharding(mesh, P(None,))
+    replicated = jax.sharding.NamedSharding(mesh, P())
 
     
     # Generate dataset
@@ -283,7 +244,7 @@ def train(config):
     
     
     # Shuffle and split data
-    num_examples = math.factorial(n)
+    num_examples = math.factorial(n) ** 2
     indices = jax.random.permutation(data_key, num_examples)
     split_idx = int(config['train']['frac_train'] * num_examples)
     
@@ -304,21 +265,20 @@ def train(config):
     print("Initializing model...")
     key, model_key = jax.random.split(key)
     model = SnPerceptron(n, embed_dim, model_dim, model_key)
-    model = jax.device_put(model, replicated)
-    
+    opt_state = optimizer.init(eqx.filter(model, eqx.is_array))
+    model = eqx.filter_shard(model, replicated)
+    opt_state = eqx.filter_shard(opt_state, replicated)  
+
     # Try to load checkpoint
    #checkpoint = try_load_checkpoint(model_template, optimizer, bucket_name, config)
-    
 
     # Initialize new model and optimizer state
-    opt_state = optimizer.init(eqx.filter(model, eqx.is_inexact_array))
-
-    model, opt_state = jax.device_put((model, opt_state), replicated)  
+    
     current_step = 0
     
     # Create data iterators
     print("Creating data iterators...")
-    key, train_key, test_key = jax.random.split(key, 3)
+    key, train_key = jax.random.split(key)
     train_iterator = make_batch_iterator(
         X_train_left, X_train_right, y_train, batch_size, sharded
     )
@@ -336,7 +296,7 @@ def train(config):
         
         # Train step
         #print('About to take a step')
-        model, opt_state, train_loss = train_step(model, opt_state, train_x, train_y)
+        model, opt_state, train_loss = train_step(model, optimizer, opt_state, train_x, train_y, n)
         train_loss_value = jnp.mean(train_loss).item()
         train_losses.append(train_loss_value)
         #print('Took a single step')
@@ -348,11 +308,12 @@ def train(config):
         if step % 100 == 0 and step > 0:
             
             #print(f'Doing eval')
-            test_loss = evaluate_model(
+            test_loss = compute_loss(
                 model,
                 jax.device_put(X_test_left),
                 jax.device_put(X_test_right),
-                jax.device_put(y_test)
+                jax.device_put(y_test),
+                n
             )
             test_loss_value = jnp.mean(test_loss).item()
             #print(f'Did eval')
@@ -385,18 +346,18 @@ def main(args):
     ###########################
     seed = args.seed
     n = args.n
-    batch_size = 2 ** 18
+    batch_size = 2 ** 19
     frac_train = 0.90
     embed_dim = 128
     model_dim = 512
     optimizer_params = {
-        "learning_rate": 1e-4,
+        "learning_rate": 1e-3,
         "weight_decay": 0.0,
         "b1": 0.9,
         "b2": 0.98,
         "max_grad_norm": 1.0
     }
-    num_steps = 50_000
+    num_steps = 10_000
     warmup_steps = 0  # Set to 0 to disable warmup
     decay_steps = num_steps - warmup_steps
     ###########################

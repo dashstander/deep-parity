@@ -28,16 +28,17 @@ class SnPerceptron(eqx.Module):
     unembed: eqx.Module
 
     def __init__(self, n: int, embed_dim: int, model_dim: int, key, use_bias=True):
-        embed_key, linear_key, unembed_key = jax.random.split(key, 3)
+        lembed_key, rembed_key, linear_key, unembed_key = jax.random.split(key, 4)
         n_group = math.factorial(n)
-        self.embed = eqx.nn.Embedding(n_group, embedding_size=embed_dim, key=embed_key)
+        self.left_embed = eqx.nn.Embedding(n_group, embedding_size=embed_dim, key=lembed_key)
+        self.right_embed = eqx.nn.Embedding(n_group, embedding_size=embed_dim, key=rembed_key)
         self.linear = eqx.nn.Linear(in_features=(2 * embed_dim), out_features=model_dim, use_bias=use_bias, key=linear_key)
         self.unembed = eqx.nn.Linear(in_features=model_dim, out_features=n_group, use_bias=False, key=unembed_key)
     
     @partial(jax.vmap, in_axes=(None, 0, 0))
     def __call__(self, sigma, tau):
-        embed_sigma = self.embed(sigma)
-        embed_tau = self.embed(tau)
+        embed_sigma = self.left_embed(sigma)
+        embed_tau = self.right_embed(tau)
         preactivations = self.linear(jnp.concat([embed_sigma, embed_tau], axis=0))
         outputs = self.unembed(relu(preactivations))
         return outputs
