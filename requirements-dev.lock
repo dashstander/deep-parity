@@ -13,7 +13,7 @@
 absl-py==2.1.0
     # via chex
     # via optax
-algebraist @ git+https://github.com/dashstander/algebraist.git@08a89345641ebe5c7a596e8aa23cb2a9557b72ca
+algebraist @ git+https://github.com/dashstander/algebraist.git@2dec7daaa138207e82f105cb39db2819fcc0c4e4
     # via deep-parity
 anyio==4.4.0
     # via httpx
