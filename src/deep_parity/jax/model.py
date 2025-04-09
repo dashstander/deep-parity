@@ -23,7 +23,8 @@ class Perceptron(eqx.Module):
     
 
 class SnPerceptron(eqx.Module):
-    embed: eqx.Module
+    left_embed: eqx.Module
+    right_embed: eqx.Module
     linear: eqx.Module
     unembed: eqx.Module
 
@@ -42,3 +43,4 @@ class SnPerceptron(eqx.Module):
         preactivations = self.linear(jnp.concat([embed_sigma, embed_tau], axis=0))
         outputs = self.unembed(relu(preactivations))
         return outputs
+    
