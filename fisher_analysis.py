@@ -138,7 +138,7 @@ def compute_loss(model, batch_x, batch_y):
     return loss.mean()
 
 
-def compute_fourier_statistics(base_fourier, perturbed_fourier, idx=None):
+def compute_fourier_statistics(base_fourier, perturbed_fourier, idx):
     """
     Compute statistical summaries of the differences between Fourier coefficients
     of the base model and perturbed models.
@@ -184,10 +184,9 @@ def compute_fourier_statistics(base_fourier, perturbed_fourier, idx=None):
             stats[f"degree_{d}_max_coef_value"] = float(difference[local_max_idx])
     
     # Add perturbation index if provided
-    if idx is not None:
-        stats["perturbation_idx"] = idx
+ 
         
-    return stats
+    return pl.DataFrame(stats).with_columns(eigenvalue_index=pl.lit(idx))
 
 
 def calculate_fisher_projections(model, fisher_matrix, boolean_cube, parities, step):
