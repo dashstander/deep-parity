@@ -13,7 +13,7 @@
 absl-py==2.1.0
     # via chex
     # via optax
-algebraist @ git+https://github.com/dashstander/algebraist.git@2dec7daaa138207e82f105cb39db2819fcc0c4e4
+algebraist @ git+https://github.com/dashstander/algebraist.git@f1b266f2956c4841e9b94f47716b3f2baca4d60c
     # via deep-parity
 anyio==4.4.0
     # via httpx
@@ -35,6 +35,8 @@ attrs==23.2.0
     # via referencing
 babel==2.15.0
     # via jupyterlab-server
+beartype==0.20.2
+    # via cola-plum-dispatch
 beautifulsoup4==4.12.3
     # via nbconvert
 bleach==6.1.0
@@ -52,6 +54,10 @@ chex==0.1.89
     # via optax
 click==8.1.7
     # via wandb
+cola-ml==0.0.7
+    # via deep-parity
+cola-plum-dispatch==0.1.4
+    # via cola-ml
 comm==0.2.2
     # via ipykernel
 contourpy==1.2.1
@@ -218,6 +224,8 @@ opt-einsum==3.4.0
     # via jax
 optax==0.2.4
     # via deep-parity
+optree==0.15.0
+    # via cola-ml
 overrides==7.7.0
     # via jupyter-server
 packaging==24.1
@@ -312,6 +320,7 @@ ruff==0.5.5
 scikit-learn==1.5.2
     # via deep-parity
 scipy==1.14.0
+    # via cola-ml
     # via jax
     # via jaxlib
     # via mizani
@@ -367,6 +376,7 @@ tornado==6.4.1
     # via terminado
 tqdm==4.67.1
     # via algebraist
+    # via cola-ml
     # via deep-parity
 traitlets==5.14.3
     # via comm
@@ -388,6 +398,7 @@ typing-extensions==4.12.2
     # via equinox
     # via etils
     # via ipython
+    # via optree
 tzdata==2024.1
     # via pandas
 uri-template==1.3.0

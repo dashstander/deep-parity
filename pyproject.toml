@@ -23,6 +23,7 @@ dependencies = [
     "polars>=1.25.2",
     "pyarrow>=19.0.1",
     "algebraist @ git+https://github.com/dashstander/algebraist.git",
+    "cola-ml>=0.0.7",
 ]
 readme = "README.md"
 requires-python = ">= 3.8"
