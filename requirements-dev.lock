@@ -147,6 +147,8 @@ iprogress==0.4
 ipykernel==6.29.5
     # via deep-parity
     # via jupyterlab
+ipyprogress==0.1.0
+    # via deep-parity
 ipython==8.26.0
     # via ipykernel
 isoduration==20.11.0
