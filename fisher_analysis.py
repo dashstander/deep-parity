@@ -229,7 +229,7 @@ def decompose_gradients(proj_data, model, eigvecs, boolean_cube, step, top_k=100
     even_summary_data = []
     odd_summary_data = []
 
-    top_eigenvector_indices = proj_data.sort(pl.col('gradient_projections').abs()).tail(top_k)['index'].to_list()
+     
 
     for idx in top_eigenvector_indices:
         proj_sign = jnp.sign(proj_data.filter(pl.col('index').eq(idx))['gradient_projections'].item())

@@ -13,6 +13,12 @@
 absl-py==2.1.0
     # via chex
     # via optax
+aiohappyeyeballs==2.6.1
+    # via aiohttp
+aiohttp==3.11.16
+    # via gcsfs
+aiosignal==1.3.2
+    # via aiohttp
 algebraist @ git+https://github.com/dashstander/algebraist.git@f1b266f2956c4841e9b94f47716b3f2baca4d60c
     # via deep-parity
 anyio==4.4.0
@@ -31,6 +37,7 @@ asttokens==2.4.1
 async-lru==2.0.4
     # via jupyterlab
 attrs==23.2.0
+    # via aiohttp
     # via jsonschema
     # via referencing
 babel==2.15.0
@@ -41,6 +48,8 @@ beautifulsoup4==4.12.3
     # via nbconvert
 bleach==6.1.0
     # via nbconvert
+cachetools==5.5.2
+    # via google-auth
 certifi==2024.7.4
     # via httpcore
     # via httpx
@@ -67,6 +76,7 @@ cycler==0.12.1
 debugpy==1.8.2
     # via ipykernel
 decorator==5.1.1
+    # via gcsfs
     # via ipython
 defusedxml==0.7.1
     # via nbconvert
@@ -86,10 +96,39 @@ fonttools==4.53.1
     # via matplotlib
 fqdn==1.5.1
     # via jsonschema
+frozenlist==1.5.0
+    # via aiohttp
+    # via aiosignal
+fsspec==2025.3.2
+    # via gcsfs
+gcsfs==2025.3.2
+    # via deep-parity
 gitdb==4.0.11
     # via gitpython
 gitpython==3.1.43
     # via wandb
+google-api-core==2.24.2
+    # via google-cloud-core
+    # via google-cloud-storage
+google-auth==2.38.0
+    # via gcsfs
+    # via google-api-core
+    # via google-auth-oauthlib
+    # via google-cloud-core
+    # via google-cloud-storage
+google-auth-oauthlib==1.2.1
+    # via gcsfs
+google-cloud-core==2.4.3
+    # via google-cloud-storage
+google-cloud-storage==3.1.0
+    # via gcsfs
+google-crc32c==1.7.1
+    # via google-cloud-storage
+    # via google-resumable-media
+google-resumable-media==2.7.2
+    # via google-cloud-storage
+googleapis-common-protos==1.69.2
+    # via google-api-core
 h11==0.14.0
     # via httpcore
 httpcore==1.0.5
@@ -101,6 +140,7 @@ idna==3.7
     # via httpx
     # via jsonschema
     # via requests
+    # via yarl
 iprogress==0.4
     # via deep-parity
 ipykernel==6.29.5
@@ -189,6 +229,9 @@ mizani==0.11.4
 ml-dtypes==0.5.1
     # via jax
     # via jaxlib
+multidict==6.4.3
+    # via aiohttp
+    # via yarl
 nbclient==0.10.0
     # via nbconvert
 nbconvert==7.16.4
@@ -219,6 +262,8 @@ numpy==2.2.4
     # via scipy
     # via seaborn
     # via statsmodels
+oauthlib==3.2.2
+    # via requests-oauthlib
 opt-einsum==3.4.0
     # via jax
 optax==0.2.4
@@ -264,7 +309,15 @@ prometheus-client==0.20.0
     # via jupyter-server
 prompt-toolkit==3.0.47
     # via ipython
+propcache==0.3.1
+    # via aiohttp
+    # via yarl
+proto-plus==1.26.1
+    # via google-api-core
 protobuf==5.27.2
+    # via google-api-core
+    # via googleapis-common-protos
+    # via proto-plus
     # via wandb
 psutil==6.0.0
     # via ipykernel
@@ -276,6 +329,11 @@ pure-eval==0.2.3
     # via stack-data
 pyarrow==19.0.1
     # via deep-parity
+pyasn1==0.6.1
+    # via pyasn1-modules
+    # via rsa
+pyasn1-modules==0.4.2
+    # via google-auth
 pycparser==2.22
     # via cffi
 pygments==2.18.0
@@ -304,8 +362,14 @@ referencing==0.35.1
     # via jsonschema-specifications
     # via jupyter-events
 requests==2.32.3
+    # via gcsfs
+    # via google-api-core
+    # via google-cloud-storage
     # via jupyterlab-server
+    # via requests-oauthlib
     # via wandb
+requests-oauthlib==2.0.0
+    # via google-auth-oauthlib
 rfc3339-validator==0.1.4
     # via jsonschema
     # via jupyter-events
@@ -315,6 +379,8 @@ rfc3986-validator==0.1.1
 rpds-py==0.19.1
     # via jsonschema
     # via referencing
+rsa==4.9
+    # via google-auth
 scikit-learn==1.5.2
     # via deep-parity
 scipy==1.14.0
@@ -418,3 +484,5 @@ webencodings==0.5.1
     # via tinycss2
 websocket-client==1.8.0
     # via jupyter-server
+yarl==1.19.0
+    # via aiohttp
