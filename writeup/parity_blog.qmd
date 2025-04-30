@@ -33,7 +33,78 @@ The traditional basis for functions $f: \{-1, \; 1 \}^n \rightarrow \mathbb{R} $
 (-1, -1, -1) &\mapsto -1 \\
 \end{align}
 
-1. There are $2^n$ subsets of $[n]$ and 2^n el
+
+# My Neural Network
+
+```{python3}
+# Set up
+import numpy as np
+import jax
+import jax.numpy as jnp
+
+from deep_parity.jax.boolean_cube import fourier_transform, generate_all_binary_arrays
+
+from pathlib import Path
+
+import polars as pl
+from plotnine import ggplot, qplot, aes, geom_point, geom_histogram, facet_wrap, labs
+
+from google.cloud import storage
+import equinox as eqx
+
+import treescope 
+
+treescope.basic_interactive_setup(autovisualize_arrays=True)
+
+
+def try_load_checkpoint(model_template, bucket_name, config, step):
+    """Try to load the latest checkpoint from GCS bucket"""
+    client = storage.Client()
+    bucket = client.get_bucket(bucket_name)
+    
+    # Find checkpoints
+    n = config['model']['n']
+    seed = config['seed']
+    model_dim = config['model']['model_dim']
+    checkpoint_dir = f"full/one-layer/model_dim={model_dim}/n={n}/seed={seed}"
+    blobs = list(bucket.list_blobs(prefix=f"{checkpoint_dir}/model_"))
+    
+    if not blobs:
+        print("No checkpoints found, starting fresh training")
+        return None
+    
+    # Download latest checkpoint files
+    model_blob = bucket.blob(f"{checkpoint_dir}/model_{step}.eqx")
+    model_local_path = f"/tmp/model_{step}.eqx"
+    model_blob.download_to_filename(model_local_path)
+
+  
+    model = eqx.tree_deserialise_leaves(model_local_path, model_template)
+    
+    return model
+
+
+def try_load_fim(bucket_name, config, step):
+    client = storage.Client()
+    bucket = client.get_bucket(bucket_name)
+    
+    n = config['model']['n']
+    seed = config['seed']
+    model_dim = config['model']['model_dim']
+    checkpoint_dir = Path(f"fisher_information_matrix/one-layer/model_dim={model_dim}/n={n}/seed={seed}")
+        
+    # Download latest checkpoint files
+    tensor_blob = bucket.blob(str(f"{checkpoint_dir}/{step}/fim{step}.npy"))
+    tensor_blob_path = f"/tmp/{step}.npy"
+    tensor_blob.download_to_filename(tensor_blob_path)
+    
+    return np.load(tensor_blob_path)
+
+
+```
+
+
+
 
 ```{ojs}
 data = FileAttachment("palmer-penguins.csv").csv({ typed: true })
